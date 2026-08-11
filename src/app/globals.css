@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #58cc02;
+  --brand-dark: #58a700;
+  --brand-soft: #d7ffb8;
+  --ink: #3c3c3c;
+  --muted: #777777;
+  --line: #e5e5e5;
+  --surface: #f7f7f7;
+  --locked: #e5e5e5;
+  --warning: #ffc800;
+  --danger: #ff4b4b;
+  --success: #58cc02;
+  --card: #ffffff;
+  --shadow-btn: 0 4px 0 0 #58a700;
+  --shadow-card: 0 12px 40px rgba(60, 60, 60, 0.06);
+  --radius: 16px;
+  --font-display: "Be Vietnam Pro", "Noto Sans SC", sans-serif;
+  --font-hanzi: "Noto Sans SC", "Be Vietnam Pro", sans-serif;
+  --font-body: "Be Vietnam Pro", "Noto Sans SC", sans-serif;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-soft: var(--brand-soft);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-surface: var(--surface);
+  --color-locked: var(--locked);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-card: var(--card);
+  --font-sans: var(--font-body);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: #3c3c3c;
+  background: #ffffff;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.hanzi {
+  font-family: var(--font-hanzi);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.grain {
+  position: relative;
+}
+
+.grain::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flip-y {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.45s ease both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}

@@ -1,0 +1,315 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum NodeType {
+  VIDEO
+  FLASHCARD
+  QUIZ
+  ESSAY
+  MILESTONE
+}
+
+enum NodeStatus {
+  LOCKED
+  CURRENT
+  COMPLETED
+}
+
+enum QuestionType {
+  SINGLE
+  MULTI
+  MATCH
+  FILL
+  ORDER
+  LISTEN
+  ESSAY_PARAGRAPH
+  ESSAY_TRANSLATE
+  ESSAY_QA
+  ESSAY_TOPIC
+}
+
+enum ErrorType {
+  VOCAB
+  GRAMMAR
+  STRUCTURE
+  PINYIN
+  EXPRESSION
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(STUDENT)
+  avatarUrl    String?
+  bio          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  taughtCourses   Course[]          @relation("CourseTeacher")
+  enrollments     Enrollment[]
+  submissions     Submission[]
+  essayFeedbacks  EssayFeedback[]   @relation("TeacherFeedback")
+  progressEvents  ProgressEvent[]
+  flashcardMarks  FlashcardMark[]
+  studySessions   StudySession[]
+  streak          UserStreak?
+  dailyGoals      DailyGoal[]
+  xpEvents        XpEvent[]
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  level       String   @default("HSK1")
+  coverColor  String   @default("#1FA97A")
+  published   Boolean  @default(true)
+  teacherId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     User?        @relation("CourseTeacher", fields: [teacherId], references: [id])
+  units       Unit[]
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id         String   @id @default(cuid())
+  userId     String
+  courseId   String
+  enrolledAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model Unit {
+  id          String @id @default(cuid())
+  courseId    String
+  title       String
+  objective   String?
+  orderIndex  Int
+
+  course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  nodes  LessonNode[]
+}
+
+model LessonNode {
+  id         String   @id @default(cuid())
+  unitId     String
+  title      String
+  type       NodeType
+  orderIndex Int
+  xpReward   Int      @default(10)
+
+  unit          Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  video         LessonVideo?
+  flashcardDeck FlashcardDeck?
+  assessment    Assessment?
+  progress      ProgressEvent[]
+}
+
+model LessonVideo {
+  id          String  @id @default(cuid())
+  nodeId      String  @unique
+  videoUrl    String
+  pdfUrl      String?
+  durationSec Int     @default(300)
+  summary     String?
+
+  node LessonNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+}
+
+model FlashcardDeck {
+  id          String @id @default(cuid())
+  nodeId      String @unique
+  title       String
+  topic       String?
+  level       String?
+
+  node  LessonNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  cards Flashcard[]
+}
+
+model Flashcard {
+  id        String  @id @default(cuid())
+  deckId    String
+  hanzi     String
+  pinyin    String
+  meaningVi String
+  example   String?
+  imageUrl  String?
+
+  deck  FlashcardDeck   @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  marks FlashcardMark[]
+}
+
+model FlashcardMark {
+  id         String  @id @default(cuid())
+  userId     String
+  flashcardId String
+  known      Boolean @default(false)
+  updatedAt  DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, flashcardId])
+}
+
+model Assessment {
+  id          String @id @default(cuid())
+  nodeId      String @unique
+  title       String
+  description String?
+  passScore   Int    @default(70)
+
+  node      LessonNode  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  questions Question[]
+}
+
+model Question {
+  id             String       @id @default(cuid())
+  assessmentId   String
+  type           QuestionType
+  prompt         String
+  promptAudioUrl String?
+  optionsJson    String?
+  answerJson     String
+  orderIndex     Int
+  points         Int          @default(1)
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+}
+
+model Submission {
+  id           String   @id @default(cuid())
+  userId       String
+  assessmentId String
+  score        Float?
+  maxScore     Float?
+  autoGraded   Boolean  @default(false)
+  status       String   @default("SUBMITTED")
+  submittedAt  DateTime @default(now())
+  gradedAt     DateTime?
+
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers Answer[]
+  feedback EssayFeedback?
+
+  @@index([assessmentId])
+}
+
+model Answer {
+  id           String  @id @default(cuid())
+  submissionId String
+  questionId   String
+  responseJson String
+  isCorrect    Boolean?
+  pointsEarned Float?
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  question   Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model EssayFeedback {
+  id           String   @id @default(cuid())
+  submissionId String   @unique
+  teacherId    String
+  score        Float
+  comment      String
+  createdAt    DateTime @default(now())
+
+  submission Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  teacher    User        @relation("TeacherFeedback", fields: [teacherId], references: [id])
+  errorMarks ErrorMark[]
+}
+
+model ErrorMark {
+  id         String    @id @default(cuid())
+  feedbackId String
+  type       ErrorType
+  excerpt    String
+  suggestion String
+  startIndex Int?
+  endIndex   Int?
+
+  feedback EssayFeedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}
+
+model ProgressEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  nodeId      String
+  completed   Boolean  @default(false)
+  score       Float?
+  timeSpentSec Int     @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  node LessonNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, nodeId])
+}
+
+model StudySession {
+  id           String   @id @default(cuid())
+  userId       String
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+  durationSec  Int      @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserStreak {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  currentStreak  Int     @default(0)
+  longestStreak  Int     @default(0)
+  lastActiveDate String?
+  totalXp        Int     @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyGoal {
+  id        String  @id @default(cuid())
+  userId    String
+  date      String
+  targetXp  Int     @default(20)
+  earnedXp  Int     @default(0)
+  completed Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model XpEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
