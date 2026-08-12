@@ -3,10 +3,12 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { canAccessNode } from "@/lib/progress";
 
 export default async function QuizPage({ params }: { params: Promise<{ nodeId: string }> }) {
-  await requireUser();
+  const user = await requireUser();
   const { nodeId } = await params;
+  if (!(await canAccessNode(user.id, nodeId))) notFound();
   const node = await prisma.lessonNode.findUnique({
     where: { id: nodeId },
     include: {

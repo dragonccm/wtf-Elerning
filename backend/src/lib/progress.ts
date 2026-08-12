@@ -55,7 +55,10 @@ export async function getStudentStats(userId: string) {
   ]);
 
   const totalNodes = await prisma.lessonNode.count({
-    where: { type: { not: "MILESTONE" } },
+    where: {
+      type: { not: "MILESTONE" }, status: "PUBLISHED",
+      unit: { course: { OR: [{ enrollments: { some: { userId } } }, { classrooms: { some: { members: { some: { userId } } } } }] } },
+    },
   });
 
   const studySeconds =

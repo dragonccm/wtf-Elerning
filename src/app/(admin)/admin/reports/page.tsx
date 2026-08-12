@@ -22,16 +22,17 @@ export default async function AdminReportsPage() {
     <div>
       <h1 className="text-3xl font-extrabold">Báo cáo thống kê</h1>
       <p className="mt-1 text-[var(--muted)]">Toàn hệ thống — nhiều khóa, nhiều giáo viên.</p>
+      <a href="/api/reports/courses" className="md-button mt-5">Xuất báo cáo CSV</a>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div className="rounded-[22px] border border-[var(--line)] bg-white p-5">
+        <div className="md-card p-5">
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">Điểm TB hệ thống</p>
           <p className="mt-2 text-3xl font-extrabold">{avgScore.toFixed(1)}</p>
         </div>
-        <div className="rounded-[22px] border border-[var(--line)] bg-white p-5">
+        <div className="md-card p-5">
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">Số bài đã chấm</p>
           <p className="mt-2 text-3xl font-extrabold">{submissions.length}</p>
         </div>
-        <div className="rounded-[22px] border border-[var(--line)] bg-white p-5">
+        <div className="md-card p-5">
           <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">Tổng khóa học</p>
           <p className="mt-2 text-3xl font-extrabold">{courses.length}</p>
         </div>

@@ -4,12 +4,12 @@ import Link from "next/link";
 
 export default async function TeacherHomePage() {
   const user = await requireRole("TEACHER");
-  const courses = await prisma.course.findMany({
-    where: user.role === "ADMIN" ? undefined : { teacherId: user.id },
-    include: {
-      _count: { select: { enrollments: true, units: true } },
-    },
-  });
+  const [classrooms, members, drafts, reviews] = await Promise.all([
+    prisma.classroom.count({ where: { teacherId: user.id, status: { in: ["OPEN", "ACTIVE"] } } }),
+    prisma.classroomMember.count({ where: { classroom: { teacherId: user.id } } }),
+    prisma.course.count({ where: { teacherId: user.id, status: "DRAFT" } }),
+    prisma.course.count({ where: { teacherId: user.id, status: "PENDING_REVIEW" } }),
+  ]);
   const pending = await prisma.submission.count({
     where: {
       status: "SUBMITTED",
@@ -21,13 +21,13 @@ export default async function TeacherHomePage() {
   });
 
   return (
-    <div>
-      <h1 className="text-3xl font-extrabold">Bảng giáo viên</h1>
-      <p className="mt-1 text-[var(--muted)]">Tầng 2 — quản lý lớp và nội dung được giao.</p>
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <Stat label="Khóa phụ trách" value={String(courses.length)} />
-        <Stat label="Học viên (tổng)" value={String(courses.reduce((s, c) => s + c._count.enrollments, 0))} />
+    <div className="space-y-7">
+      <header><p className="text-sm font-bold text-[var(--md-primary)]">KHÔNG GIAN BIÊN SOẠN</p><h1 className="mt-1 text-3xl font-extrabold">Tổng quan giáo viên</h1><p className="mt-2 text-[var(--md-on-surface-variant)]">Quản lý nội dung và lớp học đang sử dụng.</p></header>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Lớp hoạt động" value={String(classrooms)} />
+        <Stat label="Học viên" value={String(members)} />
         <Stat label="Bài chờ chấm" value={String(pending)} />
+        <Stat label="Nháp / Chờ duyệt" value={`${drafts} / ${reviews}`} />
       </div>
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         <QuickLink href="/teacher/content" title="Tạo nội dung" desc="Video, flashcard, bài tập" />
@@ -39,8 +39,8 @@ export default async function TeacherHomePage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[22px] border border-[var(--line)] bg-white p-5">
-      <p className="text-xs font-bold uppercase tracking-wide text-[var(--muted)]">{label}</p>
+    <div className="md-card p-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-[var(--md-on-surface-variant)]">{label}</p>
       <p className="mt-2 text-3xl font-extrabold">{value}</p>
     </div>
   );
@@ -48,7 +48,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function QuickLink({ href, title, desc }: { href: string; title: string; desc: string }) {
   return (
-    <Link href={href} className="rounded-[22px] border border-[var(--line)] bg-white p-5 transition hover:border-[var(--brand)]">
+    <Link href={href} className="md-card p-5 transition hover:-translate-y-1 hover:shadow-lg">
       <h2 className="text-lg font-extrabold">{title}</h2>
       <p className="mt-1 text-sm text-[var(--muted)]">{desc}</p>
     </Link>

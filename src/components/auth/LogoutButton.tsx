@@ -11,7 +11,8 @@ export function LogoutButton() {
       type="button"
       variant="secondary"
       fullWidth
-      onClick={() => {
+      onClick={async () => {
+        await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
         clearToken();
         router.push("/login");
         router.refresh();

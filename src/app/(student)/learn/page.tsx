@@ -1,75 +1,27 @@
-import { LearningPath } from "@/components/learning/LearningPath";
-import { DailyBanner } from "@/components/learning/DailyBanner";
-import { UnitHeader } from "@/components/learning/UnitHeader";
-import { prisma } from "@/lib/db";
-import { activityHref, getNodeStates } from "@/lib/progress";
-import { requireUser } from "@/lib/session";
 import Link from "next/link";
+import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/session";
+import { getDaily } from "@/lib/api-server";
+import { ArrowRight, Bell, BookOpen, Clock3, Sparkles } from "lucide-react";
 
-export default async function LearnPage() {
+export default async function StudentDashboard() {
   const user = await requireUser();
-  const enrollment = await prisma.enrollment.findFirst({
-    where: { userId: user.id },
-    include: {
-      course: {
-        include: {
-          units: { orderBy: { orderIndex: "asc" } },
-        },
-      },
-    },
+  const [memberships, pendingEssays, reviewCount, daily] = await Promise.all([
+    prisma.classroomMember.findMany({ where: { userId: user.id, classroom: { course: { status: "PUBLISHED" } } }, include: { classroom: { include: { course: { include: { units: { include: { nodes: { include: { progress: { where: { userId: user.id, completed: true } } } } } } } } } } }, orderBy: { joinedAt: "desc" } }),
+    prisma.submission.count({ where: { userId: user.id, autoGraded: false, status: "SUBMITTED" } }),
+    prisma.flashcardMark.count({ where: { userId: user.id, known: false } }),
+    getDaily().catch(() => null),
+  ]);
+
+  const courses = memberships.map(({ classroom }) => {
+    const nodes = classroom.course.units.flatMap(unit => unit.nodes);
+    const done = nodes.filter(node => node.progress.length > 0).length;
+    const next = nodes.find(node => node.progress.length === 0);
+    return { classroom, total: nodes.length, done, next };
   });
+  const primary = courses[0];
 
-  if (!enrollment) {
-    return (
-      <main className="px-6 py-12">
-        <h1 className="text-3xl font-extrabold">Chưa có khóa học</h1>
-        <p className="mt-2 text-[#777]">Hãy đợi giáo viên ghi danh hoặc xem danh sách khóa.</p>
-        <Link href="/courses" className="mt-4 inline-block font-extrabold text-[var(--brand)]">
-          Xem khóa học →
-        </Link>
-      </main>
-    );
-  }
-
-  const unit = enrollment.course.units[0];
-  const nodes = unit ? await getNodeStates(user.id, unit.id) : [];
-
-  return (
-    <main className="min-h-screen">
-      <UnitHeader
-        sectionLabel={`${enrollment.course.level} · Unit 1`}
-        title={unit?.title ?? "Unit"}
-        objective={unit?.objective}
-      />
-      <DailyBanner />
-      <LearningPath
-        nodes={nodes.map((n) => ({
-          id: n.id,
-          title: n.title,
-          type: n.type,
-          state: n.state,
-          href: n.state === "locked" ? undefined : activityHref(n.type, n.id),
-        }))}
-      />
-      {enrollment.course.units.length > 1 && (
-        <div className="mx-auto max-w-[680px] px-4 pb-12 lg:px-8">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="h-0.5 flex-1 bg-[#e5e5e5]" />
-            <span className="text-sm font-extrabold text-[#afafaf]">Unit tiếp theo</span>
-            <div className="h-0.5 flex-1 bg-[#e5e5e5]" />
-          </div>
-          <ul className="space-y-3">
-            {enrollment.course.units.slice(1).map((u) => (
-              <li
-                key={u.id}
-                className="rounded-2xl border-2 border-[#e5e5e5] bg-white px-5 py-4 text-sm font-extrabold text-[#afafaf]"
-              >
-                🔒 {u.title}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </main>
-  );
+  return <main className="mx-auto max-w-3xl px-5 py-8 lg:px-8"><section className="relative overflow-hidden rounded-[28px] bg-[#173f35] p-6 text-white shadow-[0_14px_0_#0c2b24] md:p-8"><div className="absolute -right-12 -top-12 size-48 rounded-full bg-[var(--brand)]/25 blur-2xl"/><p className="text-sm font-extrabold uppercase tracking-[.18em] text-[#9cf56a]">Chào {user.name} · 你好</p><h1 className="mt-3 max-w-xl text-3xl font-extrabold leading-tight md:text-4xl">Một bước nhỏ hôm nay, một câu tiếng Trung tự tin ngày mai.</h1>{primary?<Link href={`/learn/${primary.classroom.course.id}`} className="mt-7 inline-flex items-center gap-2 rounded-2xl border-2 border-b-4 border-[#58a700] bg-[var(--brand)] px-6 py-3 font-extrabold">Tiếp tục {primary.classroom.course.title}<ArrowRight className="size-5"/></Link>:<Link href="/courses/join" className="mt-7 inline-flex rounded-2xl bg-white px-6 py-3 font-extrabold text-[#173f35]">Nhập mã lớp</Link>}</section><section className="mt-8 grid gap-3 sm:grid-cols-3"><Stat icon={<Sparkles/>} label="XP hôm nay" value={`${daily?.dailyEarned??0}/${daily?.dailyTarget??20}`}/><Stat icon={<Clock3/>} label="Bài chờ chấm" value={String(pendingEssays)}/><Stat icon={<BookOpen/>} label="Thẻ cần ôn" value={String(reviewCount)}/></section><div className="mt-9 flex items-end justify-between"><div><p className="text-sm font-extrabold uppercase tracking-wider text-[var(--brand-dark)]">Lớp đang học</p><h2 className="mt-1 text-2xl font-extrabold">Lộ trình của bạn</h2></div><Link href="/notifications" className="flex items-center gap-2 text-sm font-bold text-[var(--muted)]"><Bell className="size-4"/>Thông báo</Link></div><div className="mt-4 grid gap-4">{courses.map(({classroom,total,done})=>{const percent=total?Math.round(done/total*100):0;return <Link href={`/learn/${classroom.course.id}`} key={classroom.id} className="rounded-[24px] border-2 border-[var(--line)] bg-white p-5 transition hover:-translate-y-1 hover:shadow-[var(--shadow-card)]"><div className="flex items-start justify-between gap-3"><div><span className="rounded-lg bg-[var(--brand-soft)] px-2 py-1 text-xs font-extrabold text-[var(--brand-dark)]">{classroom.course.category} · {classroom.course.level}</span><h3 className="mt-3 text-xl font-extrabold">{classroom.course.title}</h3><p className="text-sm text-[var(--muted)]">{classroom.name} · {done}/{total} bài</p></div><strong className="text-2xl text-[var(--brand-dark)]">{percent}%</strong></div><div className="mt-4 h-3 overflow-hidden rounded-full bg-[#e5e5e5]"><div className="h-full rounded-full bg-[var(--brand)]" style={{width:`${percent}%`}}/></div></Link>})}{courses.length===0&&<div className="rounded-[24px] border-2 border-dashed border-[var(--line)] p-8 text-center"><p className="font-extrabold">Bạn chưa tham gia lớp nào</p><Link href="/courses/join" className="mt-3 inline-block font-bold text-[var(--brand-dark)]">Nhập mã lớp →</Link></div>}</div></main>;
 }
+
+function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <div className="rounded-[20px] border-2 border-[var(--line)] bg-white p-4"><div className="flex size-10 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand-dark)]">{icon}</div><p className="mt-3 text-xs font-bold uppercase text-[var(--muted)]">{label}</p><p className="text-2xl font-extrabold">{value}</p></div>}

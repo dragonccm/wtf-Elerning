@@ -4,6 +4,12 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.classInvitation.deleteMany();
+  await prisma.classroomMember.deleteMany();
+  await prisma.classroom.deleteMany();
+  await prisma.mediaAsset.deleteMany();
   await prisma.errorMark.deleteMany();
   await prisma.essayFeedback.deleteMany();
   await prisma.answer.deleteMany();
@@ -66,17 +72,24 @@ async function main() {
       description: "Chào hỏi, giới thiệu bản thân và từ vựng đời sống.",
       level: "HSK1",
       teacherId: teacher.id,
+      creatorId: teacher.id,
+      reviewerId: admin.id,
+      category: "HSK",
+      status: "PUBLISHED",
+      publishedAt: new Date(),
       units: {
         create: [
           {
             title: "Unit 1 — Chào hỏi",
             objective: "Dùng câu chào cơ bản, làm quen bạn mới",
             orderIndex: 1,
+            status: "PUBLISHED",
           },
           {
             title: "Unit 2 — Gia đình",
             objective: "Nói về người thân và quan hệ",
             orderIndex: 2,
+            status: "PUBLISHED",
           },
         ],
       },
@@ -94,12 +107,27 @@ async function main() {
     ],
   });
 
+  const classroom = await prisma.classroom.create({
+    data: {
+      courseId: course.id,
+      teacherId: teacher.id,
+      name: "HSK1 · Lớp tối 2026",
+      code: "HSK1-DEMO",
+      passwordHash,
+      status: "ACTIVE",
+      startsAt: new Date("2026-08-01T00:00:00+07:00"),
+      endsAt: new Date("2026-12-31T23:59:59+07:00"),
+      members: { create: [{ userId: student.id }, { userId: student2.id }] },
+    },
+  });
+
   const videoNode = await prisma.lessonNode.create({
     data: {
       unitId: unit1.id,
       title: "Video: Xin chào",
       type: "VIDEO",
       orderIndex: 1,
+      status: "PUBLISHED",
       video: {
         create: {
           videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
@@ -117,6 +145,7 @@ async function main() {
       title: "Flashcard chào hỏi",
       type: "FLASHCARD",
       orderIndex: 2,
+      status: "PUBLISHED",
       flashcardDeck: {
         create: {
           title: "Chào hỏi cơ bản",
@@ -161,6 +190,7 @@ async function main() {
       title: "Kiểm tra Unit 1",
       type: "QUIZ",
       orderIndex: 3,
+      status: "PUBLISHED",
       assessment: {
         create: {
           title: "Quiz chào hỏi",
@@ -228,6 +258,7 @@ async function main() {
       title: "Tự luận: Giới thiệu bản thân",
       type: "ESSAY",
       orderIndex: 4,
+      status: "PUBLISHED",
       assessment: {
         create: {
           title: "Viết đoạn giới thiệu",
@@ -255,6 +286,7 @@ async function main() {
       type: "MILESTONE",
       orderIndex: 5,
       xpReward: 50,
+      status: "PUBLISHED",
     },
   });
 
@@ -264,6 +296,7 @@ async function main() {
       title: "Video: Gia đình tôi",
       type: "VIDEO",
       orderIndex: 1,
+      status: "PUBLISHED",
       video: {
         create: {
           videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
@@ -309,6 +342,7 @@ async function main() {
   console.log("  teacher@wtf.edu / password123");
   console.log("  student@wtf.edu / password123");
   console.log(`Course: ${course.title}`);
+  console.log(`Class: ${classroom.code} / password123`);
   console.log(`Nodes: video=${videoNode.id}, flash=${flashNode.id}, quiz=${quizNode.id}, essay=${essayNode.id}`);
 }
 

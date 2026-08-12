@@ -139,7 +139,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send({ error: "Invalid credentials" });
 
     const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-    if (!user) return reply.status(401).send({ error: "Email hoặc mật khẩu không đúng" });
+    if (!user || !user.isActive) return reply.status(401).send({ error: "Email hoặc mật khẩu không đúng" });
 
     const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
     if (!ok) return reply.status(401).send({ error: "Email hoặc mật khẩu không đúng" });

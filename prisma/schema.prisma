@@ -48,6 +48,36 @@ enum ErrorType {
   EXPRESSION
 }
 
+enum CourseCategory {
+  HSK
+  COMMUNICATION
+  EXAM
+}
+
+enum PublishStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ClassroomStatus {
+  DRAFT
+  OPEN
+  ACTIVE
+  ENDED
+  ARCHIVED
+}
+
+enum InvitationStatus {
+  PENDING
+  SENT
+  SKIPPED_DEV
+  FAILED
+  ACCEPTED
+  EXPIRED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -60,6 +90,8 @@ model User {
   googleRefreshToken String?
   googleScope        String?
   bio          String?
+  isActive     Boolean  @default(true)
+  disabledAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -73,6 +105,14 @@ model User {
   streak          UserStreak?
   dailyGoals      DailyGoal[]
   xpEvents        XpEvent[]
+  createdCourses  Course[]          @relation("CourseCreator")
+  reviewedCourses Course[]          @relation("CourseReviewer")
+  taughtClasses   Classroom[]       @relation("ClassroomTeacher")
+  classMemberships ClassroomMember[]
+  invitationsSent ClassInvitation[] @relation("InvitationSender")
+  invitations     ClassInvitation[] @relation("InvitationRecipient")
+  notifications   Notification[]
+  auditLogs        AuditLog[]        @relation("AuditActor")
 }
 
 model Course {
@@ -83,12 +123,122 @@ model Course {
   coverColor  String   @default("#1FA97A")
   published   Boolean  @default(true)
   teacherId   String?
+  category    CourseCategory @default(HSK)
+  status      PublishStatus  @default(DRAFT)
+  creatorId   String?
+  reviewerId  String?
+  reviewNote  String?
+  publishedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   teacher     User?        @relation("CourseTeacher", fields: [teacherId], references: [id])
   units       Unit[]
   enrollments Enrollment[]
+  creator     User?        @relation("CourseCreator", fields: [creatorId], references: [id])
+  reviewer    User?        @relation("CourseReviewer", fields: [reviewerId], references: [id])
+  classrooms  Classroom[]
+}
+
+model Classroom {
+  id              String          @id @default(cuid())
+  courseId        String
+  teacherId       String
+  name            String
+  code            String          @unique
+  passwordHash    String
+  passwordVersion Int             @default(1)
+  status          ClassroomStatus @default(DRAFT)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  failedAttempts  Int             @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  course      Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher     User               @relation("ClassroomTeacher", fields: [teacherId], references: [id])
+  members     ClassroomMember[]
+  invitations ClassInvitation[]
+
+  @@index([teacherId, status])
+  @@index([courseId])
+}
+
+model ClassroomMember {
+  id          String   @id @default(cuid())
+  classroomId String
+  userId      String
+  joinedAt    DateTime @default(now())
+
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([classroomId, userId])
+  @@index([userId])
+}
+
+model ClassInvitation {
+  id          String           @id @default(cuid())
+  classroomId String
+  senderId    String
+  recipientId String?
+  email       String
+  status      InvitationStatus @default(PENDING)
+  error       String?
+  sentAt      DateTime?
+  acceptedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime         @default(now())
+
+  classroom Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  sender    User      @relation("InvitationSender", fields: [senderId], references: [id])
+  recipient User?     @relation("InvitationRecipient", fields: [recipientId], references: [id])
+
+  @@index([email, status])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  href      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  detailJson String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  ownerId      String
+  originalName String
+  storedName   String   @unique
+  mimeType     String
+  size         Int
+  url          String
+  createdAt    DateTime @default(now())
+
+  @@index([ownerId])
 }
 
 model Enrollment {
@@ -109,6 +259,7 @@ model Unit {
   title       String
   objective   String?
   orderIndex  Int
+  status      PublishStatus @default(DRAFT)
 
   course Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
   nodes  LessonNode[]
@@ -121,6 +272,7 @@ model LessonNode {
   type       NodeType
   orderIndex Int
   xpReward   Int      @default(10)
+  status     PublishStatus @default(DRAFT)
 
   unit          Unit            @relation(fields: [unitId], references: [id], onDelete: Cascade)
   video         LessonVideo?

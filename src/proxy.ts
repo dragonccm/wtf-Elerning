@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export async function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("wtf_token")?.value;
 
@@ -17,7 +17,8 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/profile") ||
     pathname.startsWith("/docs") ||
     pathname.startsWith("/teacher") ||
-    pathname.startsWith("/admin");
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/notifications");
 
   if (!token && protectedPaths) {
     return NextResponse.redirect(new URL("/login", req.url));
@@ -39,6 +40,7 @@ export const config = {
     "/docs/:path*",
     "/teacher/:path*",
     "/admin/:path*",
+    "/notifications/:path*",
     "/login",
     "/register",
     "/forgot-password",
