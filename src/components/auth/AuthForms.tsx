@@ -59,6 +59,12 @@ export function LoginForm() {
           {pending ? "Đang đăng nhập..." : "Đăng nhập"}
         </Button>
       </form>
+      <a
+        href="/api/v1/auth/google"
+        className="mt-3 flex w-full items-center justify-center rounded-2xl border-2 border-[var(--line)] px-4 py-3 text-sm font-extrabold text-[var(--ink)] transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
+      >
+        Tiếp tục với Google
+      </a>
       <div className="mt-4 flex justify-between text-sm font-semibold text-[var(--brand)]">
         <Link href="/forgot-password">Quên mật khẩu?</Link>
         <Link href="/register">Đăng ký</Link>

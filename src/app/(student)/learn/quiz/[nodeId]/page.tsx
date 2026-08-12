@@ -27,7 +27,7 @@ export default async function QuizPage({ params }: { params: Promise<{ nodeId: s
 
   return (
     <main className="flex min-h-screen flex-col">
-      <div className="flex items-center justify-between px-4 py-4">
+      <div className="hidden">
         <Link href="/learn" className="text-sm font-bold text-[var(--muted)]">
           ✕ Thoát
         </Link>

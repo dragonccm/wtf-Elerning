@@ -87,27 +87,31 @@ export function QuizPlayer({
   }
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col px-4 lg:px-8">
-      <div className="flex items-center gap-4 py-4">
-        <Link href="/learn" className="text-2xl font-light text-[#afafaf] hover:text-[#777]">
+    <div className="mx-auto flex min-h-[calc(100dvh-2rem)] w-full max-w-6xl flex-col px-4 sm:px-6 lg:px-10 xl:px-12">
+      <div className="flex items-center gap-4 py-4 lg:gap-6 lg:py-6">
+        <Link
+          href="/learn"
+          aria-label="Thoát bài kiểm tra"
+          className="flex size-11 items-center justify-center rounded-full text-3xl font-light text-[#afafaf] transition hover:bg-[#f7f7f7] hover:text-[#777] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#84d8ff]/50"
+        >
           ×
         </Link>
-        <ProgressBar value={progress} className="h-4 flex-1" />
-        <div className="flex items-center gap-1 font-extrabold text-[#ff4b4b]">
-          <Heart className="size-5 fill-current" /> 5
+        <ProgressBar value={progress} className="h-4 flex-1 lg:h-5" />
+        <div className="flex items-center gap-1.5 text-base font-extrabold text-[#ff4b4b] lg:text-lg">
+          <Heart className="size-5 fill-current lg:size-6" /> 5
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col py-4">
-        <span className="inline-flex w-fit rounded-lg bg-[#ce82ff]/15 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#ce82ff]">
+      <div className="flex flex-1 flex-col py-5 lg:py-8">
+        <span className="inline-flex w-fit rounded-lg bg-[#ce82ff]/15 px-2.5 py-1.5 text-xs font-extrabold uppercase tracking-wide text-[#ce82ff] lg:text-sm">
           Câu hỏi {index + 1}
         </span>
-        <h2 className="mt-3 text-2xl font-extrabold leading-snug text-[#3c3c3c] lg:text-3xl">{q.prompt}</h2>
+        <h2 className="mt-4 max-w-5xl text-3xl font-extrabold leading-tight text-[#3c3c3c] lg:text-4xl xl:text-[44px]">{q.prompt}</h2>
 
         {(q.type === "SINGLE" || q.type === "LISTEN" || q.type === "MATCH") && (
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:mt-10 lg:gap-5">
             {q.type === "LISTEN" && (
-              <div className="sm:col-span-2 lg:col-span-3 mb-2 flex justify-center">
+              <div className="mb-2 flex justify-center sm:col-span-2">
                 <Button type="button" variant="secondary" onClick={() => alert("🔊 nǐ hǎo (demo audio)")}>
                   Nghe lại
                 </Button>
@@ -128,7 +132,7 @@ export function QuizPlayer({
         )}
 
         {q.type === "MULTI" && (
-          <div className="mt-8 grid gap-3">
+          <div className="mt-8 grid gap-4 lg:mt-10 lg:grid-cols-2 lg:gap-5">
             {q.options.map((opt, i) => (
               <ChoiceCard
                 key={opt}
@@ -180,7 +184,7 @@ export function QuizPlayer({
           checked ? "border-[#58a700] bg-[#d7ffb8]" : "border-[#e5e5e5] bg-white",
         )}
       >
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           {checked ? (
             <div className="flex items-center gap-3">
               <div className="flex size-14 items-center justify-center rounded-full bg-white text-[var(--brand)]">
