@@ -2,6 +2,7 @@ import { setUserRoleAction } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { toggleUserActiveAction } from "@/lib/classroom-actions";
 
 export default async function AdminStudentsPage() {
   await requireRole("ADMIN");
@@ -20,7 +21,7 @@ export default async function AdminStudentsPage() {
       <p className="mt-1 text-[var(--muted)]">Toàn hệ thống — xem ghi danh và hoạt động.</p>
       <ul className="mt-6 space-y-3">
         {students.map((s) => (
-          <li key={s.id} className="rounded-[22px] border border-[var(--line)] bg-white p-5">
+          <li key={s.id} className="md-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="font-extrabold">{s.name}</p>
@@ -30,7 +31,7 @@ export default async function AdminStudentsPage() {
                   {s._count.progressEvents} bài xong · {s._count.submissions} bài nộp
                 </p>
               </div>
-              <form action={setUserRoleAction} className="flex gap-2">
+              <div className="flex flex-wrap gap-2"><form action={setUserRoleAction} className="flex gap-2">
                 <input type="hidden" name="userId" value={s.id} />
                 <select name="role" defaultValue="STUDENT" className="rounded-xl border-2 border-[var(--line)] px-2 py-1 text-sm">
                   <option value="STUDENT">STUDENT</option>
@@ -40,7 +41,7 @@ export default async function AdminStudentsPage() {
                 <Button type="submit" variant="secondary">
                   Đổi role
                 </Button>
-              </form>
+              </form><form action={toggleUserActiveAction}><input type="hidden" name="userId" value={s.id}/><button className={`md-button ${s.isActive?"outlined":"tonal"}`}>{s.isActive?"Khóa tài khoản":"Mở tài khoản"}</button></form></div>
             </div>
           </li>
         ))}

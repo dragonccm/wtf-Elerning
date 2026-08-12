@@ -2,11 +2,13 @@ import { FlashcardSession } from "@/components/learning/FlashcardSession";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { notFound } from "next/navigation";
+import { canAccessNode } from "@/lib/progress";
 import Link from "next/link";
 
 export default async function FlashcardsPage({ params }: { params: Promise<{ nodeId: string }> }) {
   const user = await requireUser();
   const { nodeId } = await params;
+  if (!(await canAccessNode(user.id, nodeId))) notFound();
   const node = await prisma.lessonNode.findUnique({
     where: { id: nodeId },
     include: {

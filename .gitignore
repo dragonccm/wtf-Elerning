@@ -23,6 +23,8 @@ node_modules
 
 # misc
 .DS_Store
+public/uploads/*
+!public/uploads/.gitkeep
 *.pem
 
 # debug

@@ -38,7 +38,7 @@ export type DailyPayload = {
 };
 
 export type PathPayload = {
-  enrollment: { courseId: string; courseTitle: string; level: string } | null;
+  course: { id: string; title: string; level: string };
   unit: { id: string; title: string; objective: string | null } | null;
   nodes: {
     id: string;

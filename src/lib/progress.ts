@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NodeType } from "@prisma/client";
+import { awardXp } from "@/lib/streak";
 
 export async function getNodeStates(userId: string, unitId: string) {
   const nodes = await prisma.lessonNode.findMany({
@@ -41,8 +42,41 @@ export function activityHref(type: NodeType, nodeId: string) {
   }
 }
 
+export async function canAccessNode(userId: string, nodeId: string) {
+  const node = await prisma.lessonNode.findFirst({
+    where: {
+      id: nodeId,
+      status: "PUBLISHED",
+      unit: { course: { status: "PUBLISHED", OR: [{ enrollments: { some: { userId } } }, { classrooms: { some: { members: { some: { userId } } } } }] } },
+    },
+    select: { unitId: true, orderIndex: true },
+  });
+  if (!node) return false;
+  const unfinished = await prisma.lessonNode.count({
+    where: { unitId: node.unitId, orderIndex: { lt: node.orderIndex }, status: "PUBLISHED", progress: { none: { userId, completed: true } } },
+  });
+  return unfinished === 0;
+}
+
 export async function completeNode(userId: string, nodeId: string, score?: number, timeSpentSec = 0) {
-  return prisma.progressEvent.upsert({
+  const [node, existing] = await Promise.all([
+    prisma.lessonNode.findFirst({
+      where: { id: nodeId, unit: { course: { OR: [{ enrollments: { some: { userId } } }, { classrooms: { some: { members: { some: { userId } } } } }] } } },
+      select: { type: true, xpReward: true, orderIndex: true, unitId: true },
+    }),
+    prisma.progressEvent.findUnique({ where: { userId_nodeId: { userId, nodeId } } }),
+  ]);
+  if (!node) throw new Error("Không tìm thấy bài học");
+  const unfinishedPrerequisites = await prisma.lessonNode.count({
+    where: {
+      unitId: node.unitId,
+      orderIndex: { lt: node.orderIndex },
+      progress: { none: { userId, completed: true } },
+    },
+  });
+  if (unfinishedPrerequisites > 0) throw new Error("Bài học này chưa được mở khóa");
+
+  const progress = await prisma.progressEvent.upsert({
     where: { userId_nodeId: { userId, nodeId } },
     create: {
       userId,
@@ -59,6 +93,8 @@ export async function completeNode(userId: string, nodeId: string, score?: numbe
       completedAt: new Date(),
     },
   });
+  if (!existing?.completed) await awardXp(userId, node.xpReward, `complete:${node.type}`);
+  return progress;
 }
 
 export async function getStudentStats(userId: string) {
@@ -69,7 +105,10 @@ export async function getStudentStats(userId: string) {
   ]);
 
   const totalNodes = await prisma.lessonNode.count({
-    where: { type: { not: "MILESTONE" } },
+    where: {
+      type: { not: "MILESTONE" }, status: "PUBLISHED",
+      unit: { course: { OR: [{ enrollments: { some: { userId } } }, { classrooms: { some: { members: { some: { userId } } } } }] } },
+    },
   });
 
   const studySeconds = sessions.reduce((sum, s) => sum + s.durationSec, 0) +

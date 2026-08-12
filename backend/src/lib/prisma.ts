@@ -11,11 +11,15 @@ export const prisma =
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export function todayKey(d = new Date()) {
-  return d.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: process.env.APP_TIME_ZONE || "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 export function yesterdayKey(d = new Date()) {
-  const y = new Date(d);
-  y.setDate(y.getDate() - 1);
-  return todayKey(y);
+  const [year, month, day] = todayKey(d).split("-").map(Number);
+  return todayKey(new Date(Date.UTC(year, month - 1, day - 1, 12)));
 }

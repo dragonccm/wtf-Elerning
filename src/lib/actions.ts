@@ -1,67 +1,14 @@
 "use server";
 
-import { signIn, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { gradeAnswers } from "@/lib/scoring";
 import { completeNode } from "@/lib/progress";
-import { homeForRole } from "@/lib/roles";
 import bcrypt from "bcryptjs";
-import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { ErrorType, QuestionType, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-
-export async function loginAction(formData: FormData) {
-  const email = String(formData.get("email") || "");
-  const password = String(formData.get("password") || "");
-  try {
-    await signIn("credentials", { email, password, redirect: false });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      redirect("/login?error=invalid");
-    }
-    throw error;
-  }
-  const user = await prisma.user.findUnique({ where: { email } });
-  redirect(homeForRole(user?.role ?? "STUDENT"));
-}
-
-export async function registerAction(formData: FormData) {
-  const schema = z.object({
-    name: z.string().min(2),
-    email: z.string().email(),
-    password: z.string().min(6),
-  });
-  const parsed = schema.safeParse({
-    name: formData.get("name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-  if (!parsed.success) redirect("/register?error=invalid");
-  const exists = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  if (exists) redirect("/register?error=exists");
-  const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-  await prisma.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash,
-      role: "STUDENT",
-    },
-  });
-  await signIn("credentials", {
-    email: parsed.data.email,
-    password: parsed.data.password,
-    redirect: false,
-  });
-  redirect("/learn");
-}
-
-export async function logoutAction() {
-  await signOut({ redirectTo: "/login" });
-}
 
 export async function updateProfileAction(formData: FormData) {
   const user = await requireUser();
@@ -188,8 +135,11 @@ export async function submitEssayAction(assessmentId: string, nodeId: string, te
     where: { id: assessmentId },
     include: { questions: true },
   });
-  if (!assessment) throw new Error("Not found");
+  if (!assessment || assessment.nodeId !== nodeId) throw new Error("Không tìm thấy bài tự luận");
   const question = assessment.questions[0];
+  if (!question || !question.type.startsWith("ESSAY")) throw new Error("Bài tự luận không hợp lệ");
+  const cleanText = text.trim();
+  if (cleanText.length < 10) throw new Error("Bài viết cần ít nhất 10 ký tự");
   const submission = await prisma.submission.create({
     data: {
       userId: user.id,
@@ -201,7 +151,7 @@ export async function submitEssayAction(assessmentId: string, nodeId: string, te
         create: [
           {
             questionId: question.id,
-            responseJson: JSON.stringify(text),
+            responseJson: JSON.stringify(cleanText),
           },
         ],
       },
@@ -225,7 +175,18 @@ export async function gradeEssayAction(formData: FormData) {
     where: { id: submissionId },
     include: { answers: true },
   });
-  if (!submission) throw new Error("Missing submission");
+  if (!submission || submission.autoGraded || submission.status !== "SUBMITTED") {
+    throw new Error("Bài nộp không còn chờ chấm");
+  }
+  if (teacher.role !== "ADMIN") {
+    const ownsSubmission = await prisma.enrollment.count({
+      where: { userId: submission.userId, course: { teacherId: teacher.id } },
+    });
+    if (!ownsSubmission) throw new Error("Bạn không có quyền chấm bài này");
+  }
+  if (!Number.isFinite(score) || score < 0 || score > (submission.maxScore ?? 10)) {
+    throw new Error("Điểm không hợp lệ");
+  }
 
   await prisma.essayFeedback.create({
     data: {
@@ -257,17 +218,50 @@ export async function gradeEssayAction(formData: FormData) {
 }
 
 export async function createCourseAction(formData: FormData) {
-  await requireRole("ADMIN");
+  const user = await requireRole("TEACHER");
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
   const level = String(formData.get("level") || "HSK1");
   const teacherId = String(formData.get("teacherId") || "") || null;
+  const category = z.enum(["HSK", "COMMUNICATION", "EXAM"]).catch("HSK").parse(formData.get("category"));
   if (!title) redirect("/admin/courses?error=title");
   await prisma.course.create({
-    data: { title, description, level, teacherId },
+    data: {
+      title,
+      description,
+      level,
+      category,
+      teacherId: user.role === "ADMIN" ? teacherId : user.id,
+      creatorId: user.id,
+      status: "DRAFT",
+      published: false,
+    },
   });
   revalidatePath("/admin/courses");
-  redirect("/admin/courses");
+  revalidatePath("/teacher/content");
+  redirect(user.role === "ADMIN" ? "/admin/courses?ok=created" : "/teacher/content?ok=created");
+}
+
+export async function createUnitAction(formData: FormData) {
+  const user = await requireRole("TEACHER");
+  const courseId = String(formData.get("courseId") || "");
+  const title = String(formData.get("title") || "").trim();
+  const objective = String(formData.get("objective") || "").trim();
+  if (!courseId || !title) redirect("/admin/courses?error=unit");
+  const course = await prisma.course.findFirst({ where: { id: courseId, ...(user.role === "ADMIN" ? {} : { teacherId: user.id }), status: { in: ["DRAFT", "PENDING_REVIEW"] } } });
+  if (!course || course.status === "PENDING_REVIEW") redirect(user.role === "ADMIN" ? "/admin/courses?error=locked" : "/teacher/content?error=locked");
+
+  const lastUnit = await prisma.unit.findFirst({
+    where: { courseId },
+    orderBy: { orderIndex: "desc" },
+    select: { orderIndex: true },
+  });
+  await prisma.unit.create({
+    data: { courseId, title, objective: objective || null, orderIndex: (lastUnit?.orderIndex ?? 0) + 1, status: "DRAFT" },
+  });
+  revalidatePath("/admin/courses");
+  revalidatePath("/teacher/content");
+  redirect(user.role === "ADMIN" ? "/admin/courses?ok=unit" : "/teacher/content?ok=unit");
 }
 
 export async function createTeacherAction(formData: FormData) {
@@ -287,7 +281,7 @@ export async function createTeacherAction(formData: FormData) {
 export async function assignTeacherAction(formData: FormData) {
   await requireRole("ADMIN");
   const courseId = String(formData.get("courseId"));
-  const teacherId = String(formData.get("teacherId"));
+  const teacherId = String(formData.get("teacherId") || "") || null;
   await prisma.course.update({ where: { id: courseId }, data: { teacherId } });
   revalidatePath("/admin/courses");
   redirect("/admin/courses");
@@ -306,7 +300,7 @@ export async function createFlashcardDeckAction(formData: FormData) {
     where: { id: unitId },
     include: { course: true, nodes: true },
   });
-  if (!unit || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
+  if (!unit || unit.course.status !== "DRAFT" || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
     redirect("/teacher/content?error=forbidden");
   }
 
@@ -344,7 +338,7 @@ export async function createVideoLessonAction(formData: FormData) {
     where: { id: unitId },
     include: { course: true, nodes: true },
   });
-  if (!unit || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
+  if (!unit || unit.course.status !== "DRAFT" || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
     redirect("/teacher/content?error=forbidden");
   }
   await prisma.lessonNode.create({
@@ -377,7 +371,7 @@ export async function createQuizAction(formData: FormData) {
     where: { id: unitId },
     include: { course: true, nodes: true },
   });
-  if (!unit || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
+  if (!unit || unit.course.status !== "DRAFT" || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
     redirect("/teacher/content?error=forbidden");
   }
   await prisma.lessonNode.create({
@@ -407,6 +401,50 @@ export async function createQuizAction(formData: FormData) {
   });
   revalidatePath("/teacher/content");
   redirect("/teacher/content");
+}
+
+export async function createEssayAction(formData: FormData) {
+  const teacher = await requireRole("TEACHER");
+  const unitId = String(formData.get("unitId") || "");
+  const title = String(formData.get("title") || "Bài tự luận").trim();
+  const prompt = String(formData.get("prompt") || "").trim();
+  const maxScore = Number(formData.get("maxScore") || 10);
+  if (!unitId || !title || !prompt || !Number.isFinite(maxScore) || maxScore <= 0) {
+    redirect("/teacher/content?error=essay");
+  }
+
+  const unit = await prisma.unit.findUnique({
+    where: { id: unitId },
+    include: { course: true, nodes: true },
+  });
+  if (!unit || unit.course.status !== "DRAFT" || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
+    redirect("/teacher/content?error=forbidden");
+  }
+
+  await prisma.lessonNode.create({
+    data: {
+      unitId,
+      title,
+      type: "ESSAY",
+      orderIndex: unit.nodes.length + 1,
+      assessment: {
+        create: {
+          title,
+          questions: {
+            create: [{
+              type: QuestionType.ESSAY_PARAGRAPH,
+              prompt,
+              answerJson: JSON.stringify(null),
+              orderIndex: 1,
+              points: Math.round(maxScore),
+            }],
+          },
+        },
+      },
+    },
+  });
+  revalidatePath("/teacher/content");
+  redirect("/teacher/content?ok=essay");
 }
 
 export async function enrollStudentAction(formData: FormData) {

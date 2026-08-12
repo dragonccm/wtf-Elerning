@@ -2,6 +2,7 @@ import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
+import { prisma } from "@/lib/db";
 
 export type SessionUser = {
   id: string;
@@ -16,7 +17,9 @@ async function readTokenUser(): Promise<SessionUser | null> {
   try {
     const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "wtf-elearning-dev-secret-change-in-production");
     const { payload } = await jwtVerify(token, secret);
-    return payload as unknown as SessionUser;
+    const tokenUser = payload as unknown as SessionUser;
+    const user = await prisma.user.findFirst({ where: { id: tokenUser.id, isActive: true }, select: { id: true, email: true, name: true, role: true } });
+    return user;
   } catch {
     return null;
   }

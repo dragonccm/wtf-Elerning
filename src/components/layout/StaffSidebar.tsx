@@ -16,12 +16,12 @@ export function StaffSidebar({
 }) {
   const pathname = usePathname();
   return (
-    <aside className="flex h-full w-64 flex-col border-r border-[var(--line)] bg-white">
-      <div className="border-b border-[var(--line)] px-5 py-5">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--brand)]">WTF E-learning</p>
-        <h1 className="mt-1 text-lg font-extrabold text-[var(--ink)]">{title}</h1>
+    <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 flex-col bg-[var(--md-surface-container)] lg:flex">
+      <div className="px-6 py-7">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--md-primary)]">WTF · 学习空间</p>
+        <h1 className="mt-2 text-xl font-extrabold text-[var(--md-on-surface)]">{title}</h1>
       </div>
-      <nav className="flex-1 space-y-1 p-3">
+      <nav aria-label={title} className="flex-1 space-y-1 px-3">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -29,10 +29,10 @@ export function StaffSidebar({
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition",
+                "flex min-h-14 items-center gap-3 rounded-full px-5 text-sm font-bold transition",
                 active
-                  ? "bg-[var(--brand-soft)] text-[var(--brand-dark)]"
-                  : "text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--ink)]",
+                  ? "bg-[var(--md-secondary-container)] text-[var(--md-on-primary-container)]"
+                  : "text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-high)] hover:text-[var(--md-on-surface)]",
               )}
             >
               {item.icon}
@@ -41,7 +41,7 @@ export function StaffSidebar({
           );
         })}
       </nav>
-      {footer && <div className="border-t border-[var(--line)] p-4">{footer}</div>}
+      {footer && <div className="p-5">{footer}</div>}
     </aside>
   );
 }

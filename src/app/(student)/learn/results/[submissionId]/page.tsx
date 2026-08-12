@@ -9,8 +9,8 @@ import { notFound } from "next/navigation";
 export default async function ResultsPage({ params }: { params: Promise<{ submissionId: string }> }) {
   const user = await requireUser();
   const { submissionId } = await params;
-  const submission = await prisma.submission.findUnique({
-    where: { id: submissionId },
+  const submission = await prisma.submission.findFirst({
+    where: { id: submissionId, userId: user.id },
     include: {
       answers: { include: { question: true } },
       feedback: { include: { errorMarks: true } },

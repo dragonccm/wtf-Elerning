@@ -1,12 +1,13 @@
 import { StaffSidebar } from "@/components/layout/StaffSidebar";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { requireRole } from "@/lib/session";
-import { BookOpen, ChartColumn, GraduationCap, Users, Shield } from "lucide-react";
+import { BookOpen, ChartColumn, GraduationCap, Users, Shield, ScrollText } from "lucide-react";
+import { StaffTopBar } from "@/components/layout/StaffTopBar";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireRole("ADMIN");
   return (
-    <div className="flex min-h-screen">
+    <div className="staff-theme flex min-h-screen">
       <StaffSidebar
         title={`Admin · ${user.name}`}
         items={[
@@ -15,10 +16,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           { href: "/admin/teachers", label: "Giáo viên", icon: <GraduationCap className="size-4" /> },
           { href: "/admin/students", label: "Học viên", icon: <Users className="size-4" /> },
           { href: "/admin/reports", label: "Báo cáo", icon: <ChartColumn className="size-4" /> },
+          { href: "/admin/audit", label: "Nhật ký", icon: <ScrollText className="size-4" /> },
         ]}
         footer={<LogoutButton />}
       />
-      <main className="flex-1 overflow-auto p-6 md:p-8">{children}</main>
+      <div className="min-w-0 flex-1"><StaffTopBar title="Quản trị hệ thống" userName={user.name} /><main className="p-5 md:p-8">{children}</main></div>
     </div>
   );
 }

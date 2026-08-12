@@ -43,7 +43,8 @@ export default async function TeacherGradingPage() {
               <input type="hidden" name="submissionId" value={s.id} />
               <label className="text-sm font-semibold">
                 Điểm
-                <input name="score" type="number" min={0} max={10} defaultValue={8} required className="mt-1 w-full rounded-xl border-2 border-[var(--line)] px-3 py-2" />
+                <input name="score" type="number" min={0} max={s.maxScore ?? 10} step="0.5" defaultValue={Math.min(8, s.maxScore ?? 10)} required className="mt-1 w-full rounded-xl border-2 border-[var(--line)] px-3 py-2" />
+                <span className="mt-1 block text-xs text-[var(--muted)]">Tối đa {s.maxScore ?? 10} điểm</span>
               </label>
               <label className="text-sm font-semibold">
                 Loại lỗi

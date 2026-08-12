@@ -11,10 +11,11 @@ const btnMuted =
 export default async function CoursesPage() {
   const user = await requireUser();
   const courses = await prisma.course.findMany({
-    where: { published: true },
+    where: { status: "PUBLISHED" },
     include: {
       teacher: true,
       enrollments: { where: { userId: user.id } },
+      classrooms: { where: { members: { some: { userId: user.id } } } },
       _count: { select: { units: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -29,7 +30,7 @@ export default async function CoursesPage() {
 
       <ul className="mt-8 space-y-4">
         {courses.map((course) => {
-          const enrolled = course.enrollments.length > 0;
+          const enrolled = course.classrooms.length > 0 || course.enrollments.length > 0;
 
           return (
             <li
@@ -50,7 +51,7 @@ export default async function CoursesPage() {
 
                 <div className="w-full sm:w-auto sm:pl-4">
                   {enrolled ? (
-                    <Link href="/learn" className={`${btnPrimary} w-full sm:w-auto`}>
+                    <Link href={`/learn/${course.id}`} className={`${btnPrimary} w-full sm:w-auto`}>
                       Học tiếp
                     </Link>
                   ) : (
@@ -62,6 +63,7 @@ export default async function CoursesPage() {
           );
         })}
       </ul>
+      <Link href="/courses/join" className="mt-6 inline-flex font-extrabold text-[var(--brand-dark)]">Có mã lớp? Tham gia tại đây →</Link>
 
       {courses.length === 0 && (
         <p className="mt-8 text-center text-[var(--muted)]">Chưa có khóa học nào được xuất bản.</p>
