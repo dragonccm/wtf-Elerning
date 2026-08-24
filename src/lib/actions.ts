@@ -471,13 +471,63 @@ export async function createVideoLessonAction(formData: FormData) {
   redirect("/teacher/content");
 }
 
+type QuizType = "SINGLE" | "MULTI" | "FILL" | "ORDER";
+
+type DraftQuizQuestion = {
+  type: QuizType;
+  prompt: string;
+  options: string[];
+  answer: string[];
+  points: number;
+};
+
+/** Parse + validate the builder payload (questionsJson) into safe typed questions. */
+function parseDraftQuizQuestions(raw: unknown): DraftQuizQuestion[] | null {
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > 50) return null;
+  const out: DraftQuizQuestion[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) return null;
+    const rec = item as Record<string, unknown>;
+    const type = rec.type;
+    if (type !== "SINGLE" && type !== "MULTI" && type !== "FILL" && type !== "ORDER") return null;
+    const prompt = typeof rec.prompt === "string" ? rec.prompt.trim() : "";
+    if (!prompt) return null;
+    const asStringArray = (value: unknown) =>
+      Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string").map((s) => s.trim()).filter(Boolean)
+        : [];
+    const options = asStringArray(rec.options);
+    const answer = asStringArray(rec.answer);
+    const points = Math.round(Number(rec.points));
+    if (!Number.isFinite(points) || points < 1 || points > 100) return null;
+    if (type === "FILL") {
+      if (answer.length !== 1) return null;
+      out.push({ type, prompt, options: [], answer, points });
+      continue;
+    }
+    if (options.length < 2 || new Set(options).size !== options.length) return null;
+    if (type === "SINGLE") {
+      if (answer.length !== 1 || !options.includes(answer[0])) return null;
+    } else if (type === "MULTI") {
+      if (answer.length === 0 || answer.some((a) => !options.includes(a))) return null;
+    } else {
+      // ORDER: answer must be a permutation of options (order-sensitive at grading)
+      const sorted = (arr: string[]) => [...arr].sort();
+      if (answer.length !== options.length || JSON.stringify(sorted(answer)) !== JSON.stringify(sorted(options))) {
+        return null;
+      }
+    }
+    out.push({ type, prompt, options, answer, points });
+  }
+  return out;
+}
+
 export async function createQuizAction(formData: FormData) {
   const teacher = await requireRole("TEACHER");
-  const unitId = String(formData.get("unitId"));
-  const title = String(formData.get("title") || "Bài tập mới");
-  const prompt = String(formData.get("prompt") || "Chọn đáp án đúng");
-  const options = String(formData.get("options") || "A|B|C|D").split("|").map((s) => s.trim());
-  const answer = String(formData.get("answer") || options[0]);
+  const unitId = String(formData.get("unitId") || "");
+  const title = String(formData.get("title") || "Bài tập mới").trim();
+  const description = String(formData.get("description") || "").trim();
+  const passScore = Number(formData.get("passScore") || 70);
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
     include: { course: true, nodes: true },
@@ -485,6 +535,13 @@ export async function createQuizAction(formData: FormData) {
   if (!unit || unit.course.status !== "DRAFT" || (teacher.role !== "ADMIN" && unit.course.teacherId !== teacher.id)) {
     redirect("/teacher/content?error=forbidden");
   }
+  let parsed: DraftQuizQuestion[] | null = null;
+  try {
+    parsed = parseDraftQuizQuestions(JSON.parse(String(formData.get("questionsJson") || "[]")));
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) redirect("/teacher/content?error=quiz");
   await prisma.lessonNode.create({
     data: {
       unitId,
@@ -494,24 +551,26 @@ export async function createQuizAction(formData: FormData) {
       assessment: {
         create: {
           title,
+          description: description || null,
+          passScore: Number.isFinite(passScore) ? Math.min(100, Math.max(0, Math.round(passScore))) : 70,
           questions: {
-            create: [
-              {
-                type: QuestionType.SINGLE,
-                prompt,
-                optionsJson: JSON.stringify(options),
-                answerJson: JSON.stringify(answer),
-                orderIndex: 1,
-                points: 1,
-              },
-            ],
+            create: parsed.map((q, i) => ({
+              type: q.type,
+              prompt: q.prompt,
+              optionsJson: q.type === "FILL" ? null : JSON.stringify(q.options),
+              // SINGLE stores a plain string (matches QuizPlayer/seed convention);
+              // MULTI/ORDER store arrays; FILL stores the fill text as a string.
+              answerJson: JSON.stringify(q.type === "MULTI" || q.type === "ORDER" ? q.answer : q.answer[0] ?? ""),
+              orderIndex: i + 1,
+              points: q.points,
+            })),
           },
         },
       },
     },
   });
   revalidatePath("/teacher/content");
-  redirect("/teacher/content");
+  redirect("/teacher/content?ok=quiz");
 }
 
 export async function createEssayAction(formData: FormData) {

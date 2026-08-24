@@ -1,9 +1,10 @@
-import { createCourseAction, createEssayAction, createFlashcardDeckAction, createQuizAction, createUnitAction, createVideoLessonAction } from "@/lib/actions";
+import { createCourseAction, createEssayAction, createFlashcardDeckAction, createUnitAction, createVideoLessonAction } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { submitCourseForReviewAction } from "@/lib/classroom-actions";
 import { LocalUploadField } from "@/components/staff/LocalUploadField";
+import { QuizBuilder } from "@/components/staff/QuizBuilder";
 import { Fragment } from "react";
 
 export default async function TeacherContentPage() {
@@ -73,17 +74,9 @@ export default async function TeacherContentPage() {
             </Button>
           </form>
         </FormCard>
-        <FormCard title="Tạo bài tập">
-          <form action={createQuizAction} className="space-y-3">
-            <UnitSelect units={units} />
-            <input name="title" placeholder="Tiêu đề bài" required className="field" />
-            <input name="prompt" placeholder="Câu hỏi" required className="field" />
-            <input name="options" placeholder="Đáp án cách nhau |" defaultValue="A|B|C|D" className="field" />
-            <input name="answer" placeholder="Đáp án đúng" className="field" />
-            <Button type="submit" fullWidth>
-              Tạo quiz
-            </Button>
-          </form>
+        <FormCard title="Tạo bài kiểm tra">
+          <p className="mb-3 text-sm text-[var(--muted)]">Trắc nghiệm, điền khuyết hoặc xếp thứ tự — nhiều câu hỏi, tự động chấm điểm.</p>
+          <QuizBuilder units={units} />
         </FormCard>
         <FormCard title="Tạo bài tự luận">
           <form action={createEssayAction} className="space-y-3">

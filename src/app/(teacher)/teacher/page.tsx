@@ -30,8 +30,9 @@ export default async function TeacherHomePage() {
         <Stat label="Nháp / Chờ duyệt" value={`${drafts} / ${reviews}`} />
       </div>
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
-        <QuickLink href="/teacher/content" title="Tạo nội dung" desc="Video, flashcard, bài tập" />
+        <QuickLink href="/teacher/content" title="Tạo nội dung" desc="Video, flashcard, bài kiểm tra" />
         <QuickLink href="/teacher/grading" title="Chấm tự luận" desc="Nhận xét & đánh dấu lỗi" />
+        <QuickLink href="/teacher/grades" title="Bảng điểm" desc="Điểm kiểm tra theo học viên" />
       </div>
     </div>
   );

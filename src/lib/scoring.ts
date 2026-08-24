@@ -10,9 +10,13 @@ export type StudentAnswer = {
   responseJson: string;
 };
 
-function normalize(value: unknown): unknown {
+function normalize(value: unknown, ordered = false): unknown {
   if (typeof value === "string") return value.trim().toLowerCase();
-  if (Array.isArray(value)) return value.map((v) => String(v).trim().toLowerCase()).sort();
+  if (Array.isArray(value)) {
+    const mapped = value.map((v) => String(v).trim().toLowerCase());
+    // ORDER questions must keep sequence; every other type is order-insensitive.
+    return ordered ? mapped : mapped.sort();
+  }
   return value;
 }
 
@@ -36,7 +40,9 @@ export function gradeAnswers(questions: GradableQuestion[], answers: StudentAnsw
     } catch {
       return { questionId: q.id, isCorrect: false, pointsEarned: 0 };
     }
-    const correct = JSON.stringify(normalize(expected)) === JSON.stringify(normalize(actual));
+    const ordered = q.type === "ORDER";
+    const correct =
+      JSON.stringify(normalize(expected, ordered)) === JSON.stringify(normalize(actual, ordered));
     const pointsEarned = correct ? q.points : 0;
     score += pointsEarned;
     return { questionId: q.id, isCorrect: correct, pointsEarned };
