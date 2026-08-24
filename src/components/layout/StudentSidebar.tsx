@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ChartColumn, House, Layers, UserRound } from "lucide-react";
+import { ChartColumn, GraduationCap, House, Layers, UserRound, Zap } from "lucide-react";
 
 const items = [
   { href: "/learn", label: "Học", icon: House },
+  { href: "/drills", label: "Luyện", icon: Zap },
+  { href: "/classes", label: "Lớp", icon: GraduationCap },
   { href: "/courses", label: "Từ vựng", icon: Layers },
   { href: "/progress", label: "Tiến độ", icon: ChartColumn },
   { href: "/profile", label: "Hồ sơ", icon: UserRound },
@@ -59,7 +61,7 @@ export function StudentMobileNav() {
   const pathname = usePathname();
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t-2 border-[#e5e5e5] bg-white lg:hidden">
-      <ul className="mx-auto grid max-w-lg grid-cols-4">
+      <ul className="mx-auto grid max-w-lg grid-cols-6">
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;

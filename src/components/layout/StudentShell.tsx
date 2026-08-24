@@ -18,7 +18,8 @@ export function StudentShell({ children }: { children: React.ReactNode }) {
     pathname.includes("/learn/quiz/") ||
     pathname.includes("/learn/essay/") ||
     pathname.includes("/learn/milestone/") ||
-    pathname.includes("/learn/results/");
+    pathname.includes("/learn/results/") ||
+    pathname.startsWith("/drills");
 
   useEffect(() => {
     getMeApi()

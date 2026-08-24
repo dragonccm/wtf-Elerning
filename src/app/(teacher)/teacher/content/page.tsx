@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { submitCourseForReviewAction } from "@/lib/classroom-actions";
 import { LocalUploadField } from "@/components/staff/LocalUploadField";
+import { Fragment } from "react";
 
 export default async function TeacherContentPage() {
   const user = await requireRole("TEACHER");
@@ -42,6 +43,18 @@ export default async function TeacherContentPage() {
             <input name="title" placeholder="Tiêu đề" required className="field" />
             <LocalUploadField name="videoUrl" label="Tải video MP4" accept="video/mp4" />
             <textarea name="summary" placeholder="Tóm tắt" className="field" rows={2} />
+            <div className="rounded-2xl border border-[var(--line)] p-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--muted)]">Chapters (tùy chọn)</p>
+              <p className="mt-1 text-xs text-[var(--muted)]">Dòng để trống sẽ bỏ qua. Thời gian: giây hoặc m:ss (vd 1:30).</p>
+              <div className="mt-2 grid grid-cols-[1fr_76px] gap-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Fragment key={i}>
+                    <input name={`chapters[${i}][title]`} placeholder={i === 0 ? "VD: Phần chào hỏi" : `Chapter ${i + 1}`} className="field" />
+                    <input name={`chapters[${i}][startSec]`} placeholder="m:ss" className="field" />
+                  </Fragment>
+                ))}
+              </div>
+            </div>
             <Button type="submit" fullWidth>
               Đăng tải
             </Button>

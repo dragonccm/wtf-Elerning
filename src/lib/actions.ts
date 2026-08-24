@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { gradeAnswers } from "@/lib/scoring";
 import { completeNode } from "@/lib/progress";
+import { awardXp } from "@/lib/streak";
+import { SRS_INTERVAL_DAYS, SRS_LAPSE_MINUTES, SRS_MAX_STAGE } from "@/lib/drill";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -28,9 +30,20 @@ export async function forgotPasswordAction(formData: FormData) {
 
 export async function completeVideoAction(nodeId: string) {
   const user = await requireUser();
-  await completeNode(user.id, nodeId, 100, 180);
+  const node = await prisma.lessonNode.findUnique({
+    where: { id: nodeId },
+    include: { unit: true, video: true },
+  });
+  if (!node) throw new Error("Video not found");
+  const progress = await prisma.progressEvent.findUnique({
+    where: { userId_nodeId: { userId: user.id, nodeId } },
+  });
+  const watchedSec = progress?.lastPositionSec ?? 0;
+  const timeSpentSec = watchedSec > 0 ? watchedSec : (node.video?.durationSec ?? 0);
+  await completeNode(user.id, nodeId, 100, Math.max(timeSpentSec, 1));
   revalidatePath("/learn");
-  redirect("/learn");
+  revalidatePath(`/learn/${node.unit.courseId}`);
+  redirect(`/learn/${node.unit.courseId}`);
 }
 
 export async function markFlashcardAction(flashcardId: string, known: boolean) {
@@ -85,6 +98,49 @@ export async function completeFlashcardDeckAction(nodeId: string) {
   const user = await requireUser();
   await completeNode(user.id, nodeId, 100, 300);
   revalidatePath("/learn");
+  redirect("/learn");
+}
+
+/**
+ * Apply the SRS outcome of a quick drill session.
+ * resultsJson: { flashcardId, correct }[] — final result per unique card
+ * (a card answered wrong then right in the same session counts as correct).
+ */
+export async function finishDrillAction(resultsJson: string) {
+  const user = await requireUser();
+  const results = JSON.parse(resultsJson) as { flashcardId: string; correct: boolean }[];
+  if (!Array.isArray(results) || results.length === 0) redirect("/drills");
+
+  const now = new Date();
+  for (const r of results) {
+    if (typeof r.flashcardId !== "string") continue;
+    const existing = await prisma.flashcardMark.findUnique({
+      where: { userId_flashcardId: { userId: user.id, flashcardId: r.flashcardId } },
+    });
+    const stage = r.correct ? Math.min((existing?.stage ?? 0) + 1, SRS_MAX_STAGE) : 0;
+    const dueAt = r.correct
+      ? new Date(now.getTime() + SRS_INTERVAL_DAYS[stage - 1] * 86_400_000)
+      : new Date(now.getTime() + SRS_LAPSE_MINUTES * 60_000);
+    await prisma.flashcardMark.upsert({
+      where: { userId_flashcardId: { userId: user.id, flashcardId: r.flashcardId } },
+      create: {
+        userId: user.id,
+        flashcardId: r.flashcardId,
+        known: stage >= 1,
+        stage,
+        dueAt,
+        lastReviewedAt: now,
+      },
+      update: { known: stage >= 1, stage, dueAt, lastReviewedAt: now },
+    });
+  }
+
+  // Small XP reward for a real session (at least 3 unique cards)
+  if (new Set(results.map((r) => r.flashcardId)).size >= 3) {
+    await awardXp(user.id, 5, "drill:flashcards");
+  }
+  revalidatePath("/learn");
+  revalidatePath("/drills");
   redirect("/learn");
 }
 
@@ -328,12 +384,31 @@ export async function createFlashcardDeckAction(formData: FormData) {
   redirect("/teacher/content");
 }
 
+/** Parse "45" (seconds) or "1:30" (m:ss) into seconds; null when invalid. */
+function parseChapterStart(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^\d+$/.test(trimmed)) return Math.min(Number(trimmed), 86_399);
+  const m = trimmed.match(/^(\d{1,2}):([0-5]?\d)$/);
+  if (m) return Math.min(Number(m[1]) * 60 + Number(m[2]), 86_399);
+  return null;
+}
+
 export async function createVideoLessonAction(formData: FormData) {
   const teacher = await requireRole("TEACHER");
   const unitId = String(formData.get("unitId"));
   const title = String(formData.get("title") || "Bài video");
   const videoUrl = String(formData.get("videoUrl") || "");
   const summary = String(formData.get("summary") || "");
+  const chapters: { title: string; startSec: number }[] = [];
+  for (let i = 0; i < 5; i++) {
+    const chapterTitle = String(formData.get(`chapters[${i}][title]`) ?? "").trim();
+    if (!chapterTitle) continue;
+    const startSec = parseChapterStart(String(formData.get(`chapters[${i}][startSec]`) ?? ""));
+    if (startSec === null) continue;
+    chapters.push({ title: chapterTitle, startSec });
+  }
+  chapters.sort((a, b) => a.startSec - b.startSec);
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
     include: { course: true, nodes: true },
@@ -352,6 +427,9 @@ export async function createVideoLessonAction(formData: FormData) {
           videoUrl: videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4",
           summary,
           durationSec: 300,
+          chapters: {
+            create: chapters.map((c, i) => ({ title: c.title, startSec: c.startSec, orderIndex: i })),
+          },
         },
       },
     },

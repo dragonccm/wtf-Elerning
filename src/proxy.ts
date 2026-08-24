@@ -9,6 +9,8 @@ export function proxy(req: NextRequest) {
     pathname.startsWith("/learn") ||
     pathname.startsWith("/progress") ||
     pathname.startsWith("/courses") ||
+    pathname.startsWith("/classes") ||
+    pathname.startsWith("/drills") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/docs") ||
     pathname.startsWith("/teacher") ||
@@ -27,6 +29,8 @@ export const config = {
     "/learn/:path*",
     "/progress/:path*",
     "/courses/:path*",
+    "/classes/:path*",
+    "/drills/:path*",
     "/profile/:path*",
     "/docs/:path*",
     "/teacher/:path*",
