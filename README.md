@@ -5,25 +5,20 @@ Hệ thống e-learning tiếng Trung — UI/UX-first, chuỗi học bài, phân
 ## Kiến trúc
 
 ```
-backend/          Fastify API (port 4000) — auth JWT, streak, học tập
-src/              Next.js frontend (port 3000) — UI only + proxy /api/v1/*
+src/ — Next.js app (port 3000) — UI + server actions + Prisma + in-process routes /api/me, /api/daily, /api/auth/*, /api/uploads
 prisma/           Database schema (SQLite dev)
 ```
-
-Frontend gọi backend qua proxy: `/api/v1/*` → `http://localhost:4000/*`
 
 ## Chạy local
 
 ```bash
 npm install
-cd backend && npm install && cd ..
 npx prisma migrate dev
 npm run db:seed
 npm run dev
 ```
 
 - Web: http://localhost:3000
-- API: http://localhost:4000/health
 
 ### Tài khoản demo
 
@@ -39,11 +34,7 @@ npm run dev
 - **Daily goal** — mục tiêu 20 XP/ngày (hiển thị trên path + sidebar PC)
 - **XP** — cộng khi hoàn thành node / nộp quiz qua API
 
-## API endpoints (backend)
+## API endpoints
 
-```
-POST /auth/login, /auth/register
-GET  /me, /daily, /learn/path
-POST /nodes/:id/complete
-POST /assessments/:id/submit
-```
+Auth và learning actions chạy trong Next.js: server actions + in-process routes
+(login/register qua form /login /register, /api/me, /api/daily, /api/auth/google*, /api/uploads).
