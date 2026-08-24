@@ -1,4 +1,4 @@
-import { jwtVerify } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
@@ -44,4 +44,19 @@ export async function requireRole(minRole: Role) {
 
 export async function getOptionalUser() {
   return readTokenUser();
+}
+
+export async function signSessionToken(user: { id: string; email: string; name: string; role: Role }) {
+  const secret = new TextEncoder().encode(process.env.AUTH_SECRET || "wtf-elearning-dev-secret-change-in-production");
+  return new SignJWT({ id: user.id, email: user.email, name: user.name, role: user.role })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("7d")
+    .sign(secret);
+}
+
+export function homeForRole(role: Role) {
+  if (role === "ADMIN") return "/admin";
+  if (role === "TEACHER") return "/teacher";
+  return "/learn";
 }

@@ -52,3 +52,33 @@ export async function awardXp(userId: string, amount: number, reason: string) {
     });
   }
 }
+
+export async function ensureStreak(userId: string) {
+  return prisma.userStreak.upsert({
+    where: { userId },
+    create: { userId },
+    update: {},
+  });
+}
+
+export async function ensureDailyGoal(userId: string, date = todayKey()) {
+  return prisma.dailyGoal.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, targetXp: 20 },
+    update: {},
+  });
+}
+
+export async function getDailySummary(userId: string) {
+  const date = todayKey();
+  const [streak, goal] = await Promise.all([ensureStreak(userId), ensureDailyGoal(userId, date)]);
+  return {
+    date,
+    streak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    totalXp: streak.totalXp,
+    dailyTarget: goal.targetXp,
+    dailyEarned: goal.earnedXp,
+    dailyCompleted: goal.completed || goal.earnedXp >= goal.targetXp,
+  };
+}

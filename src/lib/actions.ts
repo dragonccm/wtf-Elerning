@@ -146,13 +146,42 @@ export async function finishDrillAction(resultsJson: string) {
 
 export async function submitQuizAction(assessmentId: string, nodeId: string, answersJson: string) {
   const user = await requireUser();
-  const assessment = await prisma.assessment.findUnique({
-    where: { id: assessmentId },
-    include: { questions: { orderBy: { orderIndex: "asc" } } },
+  const assessment = await prisma.assessment.findFirst({
+    where: {
+      id: assessmentId,
+      node: {
+        unit: {
+          course: {
+            OR: [
+              { enrollments: { some: { userId: user.id } } },
+              { classrooms: { some: { members: { some: { userId: user.id } } } } },
+            ],
+          },
+        },
+      },
+    },
+    include: {
+      questions: { orderBy: { orderIndex: "asc" } },
+      node: { include: { progress: { where: { userId: user.id } } } },
+    },
   });
-  if (!assessment) throw new Error("Assessment not found");
+  if (!assessment || assessment.nodeId !== nodeId) throw new Error("Assessment not found");
+
+  const unfinishedPrerequisites = await prisma.lessonNode.count({
+    where: {
+      unitId: assessment.node.unitId,
+      orderIndex: { lt: assessment.node.orderIndex },
+      progress: { none: { userId: user.id, completed: true } },
+    },
+  });
+  if (unfinishedPrerequisites > 0) throw new Error("Lesson is still locked");
 
   const answers = JSON.parse(answersJson) as { questionId: string; responseJson: string }[];
+  const allowedQuestionIds = new Set(assessment.questions.map((question) => question.id));
+  if (answers.some((answer) => !allowedQuestionIds.has(answer.questionId))) {
+    throw new Error("Invalid answer payload");
+  }
+
   const graded = gradeAnswers(assessment.questions, answers);
 
   const submission = await prisma.submission.create({
@@ -178,7 +207,11 @@ export async function submitQuizAction(assessmentId: string, nodeId: string, ans
     },
   });
 
-  if (graded.percent >= assessment.passScore) {
+  const passed = graded.percent >= assessment.passScore;
+  const firstCompletion = !assessment.node.progress.some((progress) => progress.completed);
+  if (passed && firstCompletion) await awardXp(user.id, assessment.node.xpReward, "quiz_pass");
+
+  if (passed) {
     await completeNode(user.id, nodeId, graded.percent, 600);
   }
 

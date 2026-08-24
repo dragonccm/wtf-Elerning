@@ -1,39 +1,19 @@
 "use client";
 
-import { loginApi, registerApi, setToken } from "@/lib/api-client";
+import { loginAction, registerAction } from "@/lib/auth-actions";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/Button";
 
 export function LoginForm() {
-  const router = useRouter();
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setPending(true);
-    setError("");
-    const fd = new FormData(e.currentTarget);
-    try {
-      const res = await loginApi(String(fd.get("email")), String(fd.get("password")));
-      setToken(res.token);
-      router.push(res.home);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
-    } finally {
-      setPending(false);
-    }
-  }
+  const [state, formAction, pending] = useActionState(loginAction, {});
 
   return (
     <div className="animate-rise rounded-[28px] border border-[var(--line)] bg-white p-6 shadow-[var(--shadow-card)]">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--brand)]">WTF E-learning</p>
       <h1 className="mt-2 text-2xl font-extrabold">Đăng nhập</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">Backend API riêng · JWT auth</p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      <p className="mt-1 text-sm text-[var(--muted)]">JWT auth · server actions</p>
+      <form action={formAction} className="mt-6 space-y-4">
         <label className="block text-sm font-semibold">
           Email
           <input
@@ -54,13 +34,13 @@ export function LoginForm() {
             className="mt-1 w-full rounded-2xl border-2 border-[var(--line)] px-4 py-3 outline-none focus:border-[var(--brand)]"
           />
         </label>
-        {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
+        {state?.error && <p className="text-sm font-semibold text-[var(--danger)]">{state.error}</p>}
         <Button type="submit" fullWidth disabled={pending}>
           {pending ? "Đang đăng nhập..." : "Đăng nhập"}
         </Button>
       </form>
       <a
-        href="/api/v1/auth/google"
+        href="/api/auth/google"
         className="mt-3 flex w-full items-center justify-center rounded-2xl border-2 border-[var(--line)] px-4 py-3 text-sm font-extrabold text-[var(--ink)] transition hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
       >
         Tiếp tục với Google
@@ -74,32 +54,13 @@ export function LoginForm() {
 }
 
 export function RegisterForm() {
-  const router = useRouter();
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setPending(true);
-    setError("");
-    const fd = new FormData(e.currentTarget);
-    try {
-      const res = await registerApi(String(fd.get("name")), String(fd.get("email")), String(fd.get("password")));
-      setToken(res.token);
-      router.push(res.home);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng ký thất bại");
-    } finally {
-      setPending(false);
-    }
-  }
+  const [state, formAction, pending] = useActionState(registerAction, {});
 
   return (
     <div className="animate-rise rounded-[28px] border border-[var(--line)] bg-white p-6 shadow-[var(--shadow-card)]">
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--brand)]">Học viên</p>
       <h1 className="mt-2 text-2xl font-extrabold">Tạo tài khoản</h1>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+      <form action={formAction} className="mt-6 space-y-4">
         <label className="block text-sm font-semibold">
           Họ tên
           <input name="name" required className="mt-1 w-full rounded-2xl border-2 border-[var(--line)] px-4 py-3 outline-none focus:border-[var(--brand)]" />
@@ -112,7 +73,7 @@ export function RegisterForm() {
           Mật khẩu
           <input name="password" type="password" required minLength={6} className="mt-1 w-full rounded-2xl border-2 border-[var(--line)] px-4 py-3 outline-none focus:border-[var(--brand)]" />
         </label>
-        {error && <p className="text-sm font-semibold text-[var(--danger)]">{error}</p>}
+        {state?.error && <p className="text-sm font-semibold text-[var(--danger)]">{state.error}</p>}
         <Button type="submit" fullWidth disabled={pending}>
           Đăng ký
         </Button>

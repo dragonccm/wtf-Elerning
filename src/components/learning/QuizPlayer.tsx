@@ -3,9 +3,7 @@
 import { ChoiceCard } from "@/components/ui/ChoiceCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { submitQuizAction } from "@/lib/actions";
-import { apiFetch } from "@/lib/api-client";
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Check, Heart } from "lucide-react";
 import Link from "next/link";
@@ -28,7 +26,6 @@ export function QuizPlayer({
   nodeId: string;
   questions: Q[];
 }) {
-  const router = useRouter();
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [checked, setChecked] = useState(false);
@@ -67,16 +64,7 @@ export function QuizPlayer({
       responseJson: JSON.stringify(answers[question.id] ?? ""),
     }));
     start(async () => {
-      try {
-        const res = await apiFetch<{ submissionId: string }>(`/assessments/${assessmentId}/submit`, {
-          method: "POST",
-          body: JSON.stringify({ nodeId, answers: payload }),
-        });
-        router.push(`/learn/results/${res.submissionId}`);
-        router.refresh();
-      } catch {
-        submitQuizAction(assessmentId, nodeId, JSON.stringify(payload));
-      }
+      submitQuizAction(assessmentId, nodeId, JSON.stringify(payload));
     });
   }
 
