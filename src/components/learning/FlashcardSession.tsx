@@ -1,6 +1,7 @@
 "use client";
 
 import { FlashcardFlip } from "@/components/learning/FlashcardFlip";
+import { PronunciationPractice } from "@/components/learning/PronunciationPractice";
 import { FlashcardRecallTest, type RecallResult } from "@/components/learning/FlashcardRecallTest";
 import { completeFlashcardTestAction } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
@@ -26,6 +27,9 @@ export function FlashcardSession({ cards, nodeId }: { cards: Card[]; nodeId: str
   const [index, setIndex] = useState(0);
   const [results, setResults] = useState<RecallResult[]>([]);
   const [pending, start] = useTransition();
+  const [pronoCleared, setPronoCleared] = useState<Record<string, boolean>>({});
+
+  const clearProno = (id: string) => setPronoCleared((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
 
   const card = cards[index];
   if (!card) return <p>Không có thẻ.</p>;
@@ -104,7 +108,7 @@ export function FlashcardSession({ cards, nodeId }: { cards: Card[]; nodeId: str
     <section aria-label="Phiên ôn flashcard" className="flashcard-session-shell rounded-[32px] border border-white/80 bg-white/70 p-4 shadow-[0_24px_80px_rgba(31,65,53,0.12)] backdrop-blur-sm sm:p-7">
       <LessonActor
         className="mb-4 sm:-mb-6 sm:-mr-2 sm:ml-auto"
-        message="Nhìn chữ, đoán nghĩa trong đầu rồi mới lật thẻ nhé!"
+        message="Nhìn chữ, đoán nghĩa, lật thẻ — rồi nghe và đọc to nhé!"
       />
       <div className="mx-auto max-w-xl">
         <div className="flex items-center justify-between gap-4">
@@ -115,6 +119,14 @@ export function FlashcardSession({ cards, nodeId }: { cards: Card[]; nodeId: str
         <p className="mb-5 mt-4 text-center text-sm font-semibold text-[var(--muted)]">Đoán nghĩa trước, rồi chạm vào thẻ để lật</p>
       </div>
       <div key={card.id} className="flashcard-swap"><FlashcardFlip {...card} /></div>
+      <div key={`prono-${card.id}`} className="mx-auto mt-5 max-w-xl">
+        <PronunciationPractice
+          hanzi={card.hanzi}
+          pinyin={card.pinyin}
+          onPass={() => clearProno(card.id)}
+          onSkip={() => clearProno(card.id)}
+        />
+      </div>
       <div className="flashcard-controls mx-auto mt-7 grid max-w-xl grid-cols-[auto_1fr] gap-3 sm:grid-cols-2">
         <Button
           variant="secondary"
@@ -124,11 +136,11 @@ export function FlashcardSession({ cards, nodeId }: { cards: Card[]; nodeId: str
           <ArrowLeft className="size-4" /> <span className="hidden sm:inline">Thẻ trước</span>
         </Button>
         {index < cards.length - 1 ? (
-          <Button onClick={() => setIndex((i) => i + 1)}>
+          <Button disabled={!pronoCleared[card.id]} onClick={() => setIndex((i) => i + 1)}>
             Thẻ tiếp <ArrowRight className="size-4" />
           </Button>
         ) : (
-          <Button onClick={() => setPhase("test")}>
+          <Button disabled={!pronoCleared[card.id]} onClick={() => setPhase("test")}>
             Kiểm tra thuộc bài
           </Button>
         )}
