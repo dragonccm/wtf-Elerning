@@ -37,9 +37,13 @@
 
 ## P1 — Phân biệt hóa sản phẩm
 
-### 3. Luyện phát âm (pronunciation)
+### 3. Luyện phát âm (pronunciation) — ✅ flashcard MVP (24/08/2026, `244a68a`)
 
 Ghi âm → chấm phát âm: Web Speech API (free, in-browser) hoặc Whisper API (chính xác hơn). Ghép vào video node + flashcard node (yêu cầu "đọc to" trước khi flip card).
+
+**Đã ship (flashcard MVP)**: `PronunciationPractice` trên study phase — nghe mẫu TTS zh-CN + đọc to qua `SpeechRecognition` (chấm 0–100, pass ≥ 70, pure function `scorePronunciation` exported cho unit test). Soft gate: phải đạt điểm hoặc bỏ qua trước khi sang thẻ tiếp. Graceful degradation: browser không hỗ trợ → tự skip (không block), mic bị từ chối → nút bỏ qua, safety timer 10s chống "listening" bị treo.
+
+**Còn lại**: ghép vào video node (đọc to theo đoạn); nâng cấp Whisper API nếu độ chính xác Web Speech không đủ.
 
 **Vị thế**: feature mà **không LMS nào có** (kể cả Canvas) — moat thực sự của product. Định vị như "AI-assisted learning" cho đúng trend (migrations 2026 của Canvas: `ai_experiences`, `embeddings`).
 
