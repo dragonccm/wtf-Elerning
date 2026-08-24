@@ -251,58 +251,132 @@ export async function submitEssayAction(assessmentId: string, nodeId: string, te
   redirect(`/learn/results/${submission.id}`);
 }
 
+const GRADABLE_ERROR_TYPES = ["VOCAB", "GRAMMAR", "STRUCTURE", "PINYIN", "EXPRESSION"] as const;
+
 export async function gradeEssayAction(formData: FormData) {
   const teacher = await requireRole("TEACHER");
   const submissionId = String(formData.get("submissionId"));
   const score = Number(formData.get("score"));
-  const comment = String(formData.get("comment") || "");
-  const errorType = String(formData.get("errorType") || "GRAMMAR") as ErrorType;
-  const excerpt = String(formData.get("excerpt") || "");
-  const suggestion = String(formData.get("suggestion") || "");
+  const comment = String(formData.get("comment") || "").trim();
+  if (!comment) throw new Error("Nhận xét là bắt buộc");
 
   const submission = await prisma.submission.findUnique({
     where: { id: submissionId },
-    include: { answers: true },
+    include: {
+      answers: { include: { question: { select: { rubricJson: true } } } },
+      feedback: true,
+    },
   });
-  if (!submission || submission.autoGraded || submission.status !== "SUBMITTED") {
-    throw new Error("Bài nộp không còn chờ chấm");
-  }
+  if (!submission || submission.autoGraded) throw new Error("Bài nộp này không thể chấm");
+  const isRegrade = submission.status === "GRADED" && submission.feedback !== null;
+  if (!isRegrade && submission.status !== "SUBMITTED") throw new Error("Bài nộp không còn chờ chấm");
   if (teacher.role !== "ADMIN") {
     const ownsSubmission = await prisma.enrollment.count({
       where: { userId: submission.userId, course: { teacherId: teacher.id } },
     });
     if (!ownsSubmission) throw new Error("Bạn không có quyền chấm bài này");
   }
-  if (!Number.isFinite(score) || score < 0 || score > (submission.maxScore ?? 10)) {
-    throw new Error("Điểm không hợp lệ");
+  const maxScore = submission.maxScore ?? 10;
+  if (!Number.isFinite(score) || score < 0 || score > maxScore) throw new Error("Điểm không hợp lệ");
+
+  // multiple error marks
+  const marks: { type: ErrorType; excerpt: string; suggestion: string }[] = [];
+  try {
+    const rawMarks: unknown = JSON.parse(String(formData.get("marksJson") || "[]"));
+    if (Array.isArray(rawMarks)) {
+      for (const item of rawMarks) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const type = rec.type;
+        if (!(GRADABLE_ERROR_TYPES as readonly string[]).includes(type as string)) continue;
+        const excerpt = typeof rec.excerpt === "string" ? rec.excerpt.trim() : "";
+        const suggestion = typeof rec.suggestion === "string" ? rec.suggestion.trim() : "";
+        if (!excerpt && !suggestion) continue;
+        marks.push({ type: type as ErrorType, excerpt, suggestion });
+      }
+    }
+  } catch {
+    // malformed marks JSON -> grade without marks
   }
 
-  await prisma.essayFeedback.create({
-    data: {
-      submissionId,
-      teacherId: teacher.id,
-      score,
-      comment,
-      errorMarks:
-        excerpt && suggestion
-          ? {
-              create: [{ type: errorType, excerpt, suggestion }],
-            }
-          : undefined,
-    },
-  });
+  // rubric breakdown — must mirror the question's rubric definition
+  let rubricJson: string | null = null;
+  const questionRubric = submission.answers[0]?.question?.rubricJson;
+  if (questionRubric) {
+    let def: { name: string; maxPoints: number }[] = [];
+    try {
+      const parsedDef: unknown = JSON.parse(questionRubric);
+      if (Array.isArray(parsedDef)) {
+        def = parsedDef
+          .filter((it): it is Record<string, unknown> => typeof it === "object" && it !== null)
+          .map((it) => ({ name: String(it.name ?? ""), maxPoints: Math.round(Number(it.maxPoints ?? 0)) }))
+          .filter((c) => c.name && c.maxPoints > 0);
+      }
+    } catch {
+      def = [];
+    }
+    if (def.length > 0) {
+      let rows: { name: string; maxPoints: number; points: number }[] = [];
+      try {
+        const rawScores: unknown = JSON.parse(String(formData.get("rubricScores") || "[]"));
+        if (Array.isArray(rawScores)) {
+          rows = rawScores
+            .filter((it): it is Record<string, unknown> => typeof it === "object" && it !== null)
+            .map((it) => ({ name: String(it.name ?? ""), maxPoints: Math.round(Number(it.maxPoints ?? 0)), points: Number(it.points ?? NaN) }))
+            .filter((r) => r.name && Number.isFinite(r.points));
+        }
+      } catch {
+        rows = [];
+      }
+      const pointsByName = new Map(rows.map((r) => [r.name, r.points]));
+      const valid =
+        rows.length === def.length &&
+        def.every((c) => {
+          const pts = pointsByName.get(c.name);
+          return pts !== undefined && pts >= 0 && pts <= c.maxPoints;
+        });
+      if (!valid) throw new Error("Dữ liệu chấm theo tiêu chí không hợp lệ");
+      rubricJson = JSON.stringify(rows);
+    }
+  }
+
+  const feedbackData = {
+    score,
+    comment,
+    rubricJson,
+    teacherId: teacher.id,
+    errorMarks: marks.length > 0 ? { create: marks } : undefined,
+  };
+
+  if (isRegrade && submission.feedback) {
+    await prisma.errorMark.deleteMany({ where: { feedbackId: submission.feedback.id } });
+    await prisma.essayFeedback.update({ where: { id: submission.feedback.id }, data: feedbackData });
+  } else {
+    await prisma.essayFeedback.create({ data: { ...feedbackData, submissionId } });
+  }
 
   await prisma.submission.update({
     where: { id: submissionId },
     data: { score, status: "GRADED", gradedAt: new Date() },
   });
 
-  const assessment = await prisma.assessment.findUnique({ where: { id: submission.assessmentId } });
-  if (assessment) {
-    await completeNode(submission.userId, assessment.nodeId, score, 0);
+  if (!isRegrade) {
+    const assessment = await prisma.assessment.findUnique({ where: { id: submission.assessmentId } });
+    if (assessment) await completeNode(submission.userId, assessment.nodeId, score, 0);
   }
 
+  await prisma.notification.create({
+    data: {
+      userId: submission.userId,
+      type: "GRADED",
+      title: "Bài tập đã được chấm",
+      message: `Bạn đạt ${score}/${maxScore} điểm.`,
+      href: `/learn/results/${submissionId}`,
+    },
+  });
+
   revalidatePath("/teacher/grading");
+  revalidatePath(`/learn/results/${submissionId}`);
   redirect("/teacher/grading");
 }
 
@@ -583,6 +657,29 @@ export async function createEssayAction(formData: FormData) {
     redirect("/teacher/content?error=essay");
   }
 
+  // optional rubric: [{name, maxPoints}] — total must equal maxScore
+  let rubric: { name: string; maxPoints: number }[] = [];
+  const rawRubric = String(formData.get("rubricJson") || "[]");
+  try {
+    const parsed: unknown = JSON.parse(rawRubric);
+    if (Array.isArray(parsed)) {
+      const rows: { name: string; maxPoints: number }[] = [];
+      for (const item of parsed) {
+        if (typeof item !== "object" || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        const name = typeof rec.name === "string" ? rec.name.trim() : "";
+        const maxPoints = Math.round(Number(rec.maxPoints));
+        if (!name || !Number.isFinite(maxPoints) || maxPoints <= 0) continue;
+        rows.push({ name, maxPoints });
+      }
+      const total = rows.reduce((s, r) => s + r.maxPoints, 0);
+      if (rows.length > 0 && total !== Math.round(maxScore)) redirect("/teacher/content?error=essay");
+      rubric = rows;
+    }
+  } catch {
+    // ignore malformed rubric — essay without rubric is still valid
+  }
+
   const unit = await prisma.unit.findUnique({
     where: { id: unitId },
     include: { course: true, nodes: true },
@@ -607,6 +704,7 @@ export async function createEssayAction(formData: FormData) {
               answerJson: JSON.stringify(null),
               orderIndex: 1,
               points: Math.round(maxScore),
+              rubricJson: rubric.length > 0 ? JSON.stringify(rubric) : null,
             }],
           },
         },

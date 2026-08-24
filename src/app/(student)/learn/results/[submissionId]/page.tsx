@@ -82,6 +82,22 @@ export default async function ResultsPage({ params }: { params: Promise<{ submis
         />
       )}
 
+      {submission.feedback && submission.feedback.rubricJson && rubricScores(submission.feedback.rubricJson).length > 0 && (
+        <div className="mt-4 rounded-2xl border border-[var(--line)] bg-white p-4">
+          <p className="text-sm font-bold text-[var(--muted)]">Điểm theo tiêu chí</p>
+          <ul className="mt-2 space-y-1">
+            {rubricScores(submission.feedback.rubricJson).map((c) => (
+              <li key={c.name} className="flex items-center justify-between text-sm font-semibold">
+                <span>{c.name}</span>
+                <span className="font-extrabold text-[var(--brand-dark)]">
+                  {c.points}/{c.maxPoints}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <Link href="/learn" className="mt-8 block">
         <Button fullWidth>Về lộ trình</Button>
       </Link>
@@ -95,5 +111,22 @@ function safeParse(raw: string) {
     return Array.isArray(v) ? v.join(", ") : String(v);
   } catch {
     return raw;
+  }
+}
+
+function rubricScores(raw: string): { name: string; maxPoints: number; points: number }[] {
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (!Array.isArray(v)) return [];
+    return v
+      .filter((it): it is Record<string, unknown> => typeof it === "object" && it !== null)
+      .map((it) => ({
+        name: String(it.name ?? ""),
+        maxPoints: Math.round(Number(it.maxPoints ?? 0)),
+        points: Number(it.points ?? 0),
+      }))
+      .filter((c) => c.name && Number.isFinite(c.points));
+  } catch {
+    return [];
   }
 }

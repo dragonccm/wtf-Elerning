@@ -392,6 +392,7 @@ model Question {
   answerJson     String
   orderIndex     Int
   points         Int          @default(1)
+  rubricJson     String?      // essay rubric: [{name, maxPoints}]
 
   assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   answers    Answer[]
@@ -428,11 +429,12 @@ model Answer {
 }
 
 model EssayFeedback {
-  id           String   @id @default(cuid())
-  submissionId String   @unique
+  id         String   @id @default(cuid())
+  submissionId String  @unique
   teacherId    String
   score        Float
   comment      String
+  rubricJson   String? // per-criterion scores: [{name, maxPoints, points}]
   createdAt    DateTime @default(now())
 
   submission Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)

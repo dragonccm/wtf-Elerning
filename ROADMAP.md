@@ -5,9 +5,9 @@
 
 ## Hiện trạng
 
-- **Stack**: Next.js (server actions + Prisma trực tiếp) + Fastify sidecar (port 4000) + SQLite
-- **Đã ship**: learn path (video/flashcard/quiz/essay/milestone), streak/XP/daily goal, classroom (announcements, assignments, sessions, materials), video chapters + resume position, SRS drills (Leitner stages 0–4)
-- **Nợ kỹ thuật chính**: **split-brain data layer** — 2 hệ thống cùng viết 1 SQLite DB
+- **Stack**: Next.js (server actions + Prisma trực tiếp, single process) + SQLite — Fastify sidecar đã loại (02b33e5)
+- **Đã ship**: learn path (video/flashcard/quiz/essay/milestone), streak/XP/daily goal, classroom (announcements, assignments, sessions, materials), video chapters + resume position, SRS drills (Leitner stages 0–4), pronunciation practice MVP (Web Speech API), multi-question quiz builder + gradebook, rubric essay grading + re-grade
+- **Nợ kỹ thuật chính**: test/CI (P0-2) — chưa có test framework + GitHub Actions
 
 ## P0 — Nền móng
 
@@ -68,9 +68,18 @@ Kênh: email (Resend) hoặc PWA push. Trigger: cards đến hạn + streak sắ
 
 Kèm **cài đặt thông báo per-user** (bật/tắt email/in-app theo loại sự kiện — pattern "Account & Profile" của Canvas).
 
-### 6. Rubric grading (essay)
+### 6. Rubric grading (essay) — ✅ shipped (24/08/2026)
 
 Chấm essay theo rubric criterion-based (3–4 tiêu chí × điểm) thay vì chấm tổng.
+
+**Đã ship**:
+- `EssayBuilder` — giáo viên tạo bài tự luận kèm rubric (thêm/xóa tiêu chí, tổng điểm tự tính = maxScore).
+- `GradeForm` — chấm theo tiêu chí (điểm/tiêu chí, tự tính tổng) HOẶC chấm tổng; nhận xét; **nhiều lỗi sai** (mỗi lỗi: loại + đoạn trích + gợi ý sửa). **Re-grade**: bài đã chấm hiện ở mục "Đã chấm gần đây", form pre-fill điểm + nhận xét + lỗi cũ, chấm lại thay điểm mới.
+- `gradeEssayAction` — re-grade path (xóa lỗi cũ + cập nhật feedback), validate rubric scores phải khớp định nghĩa tiêu chí của đề, tạo `Notification` type `GRADED` cho học viên (link thẳng trang results).
+- Học viên: results page hiện **điểm theo tiêu chí** (breakdown) + comment + lỗi; notification "Bài tập đã được chấm" → mở thẳng results.
+- Migration `20260824154638_add_rubric_json` (cột `rubricJson` trên `Question` + `EssayFeedback`).
+
+**Còn lại**: chấm tổng chưa bắt buộc rubric (rubric chỉ áp khi giáo viên có khai báo) — đúng design.
 
 **Tham chiếu Canvas**: rubrics + outcome rollups (SpeedGrader).
 

@@ -1,10 +1,11 @@
-import { createCourseAction, createEssayAction, createFlashcardDeckAction, createUnitAction, createVideoLessonAction } from "@/lib/actions";
+import { createCourseAction, createFlashcardDeckAction, createUnitAction, createVideoLessonAction } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { submitCourseForReviewAction } from "@/lib/classroom-actions";
 import { LocalUploadField } from "@/components/staff/LocalUploadField";
 import { QuizBuilder } from "@/components/staff/QuizBuilder";
+import { EssayBuilder } from "@/components/staff/EssayBuilder";
 import { Fragment } from "react";
 
 export default async function TeacherContentPage() {
@@ -79,13 +80,8 @@ export default async function TeacherContentPage() {
           <QuizBuilder units={units} />
         </FormCard>
         <FormCard title="Tạo bài tự luận">
-          <form action={createEssayAction} className="space-y-3">
-            <UnitSelect units={units} />
-            <input name="title" placeholder="Tiêu đề bài" required className="field" />
-            <textarea name="prompt" placeholder="Đề bài tự luận" required className="field" rows={3} />
-            <input name="maxScore" type="number" min="1" max="100" defaultValue="10" className="field" />
-            <Button type="submit" fullWidth>Tạo bài tự luận</Button>
-          </form>
+          <p className="mb-3 text-sm text-[var(--muted)]">Đề bài tự luận — có thể kèm rubric chấm theo tiêu chí.</p>
+          <EssayBuilder units={units} />
         </FormCard>
       </section>}
 
