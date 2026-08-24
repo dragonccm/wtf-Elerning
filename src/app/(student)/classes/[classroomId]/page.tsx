@@ -1,4 +1,5 @@
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { LiveRoom } from "@/components/live/LiveRoom";
 import { getStudentAssignments } from "@/lib/classroom";
 import { prisma } from "@/lib/db";
 import { activityHref } from "@/lib/progress";
@@ -308,32 +309,45 @@ export default async function StudentClassDetailPage({
             </div>
           ))}
 
-        {tab === "live" &&
-          (sessions.length === 0 ? (
-            <Empty text="Chưa có lớp trực tiếp nào sắp diễn ra." />
-          ) : (
-            <div className="grid gap-4">
-              {sessions.map((s) => (
-                <article key={s.id} className="md-card p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="md-chip">SẮP DIỄN RA</span>
-                      <h3 className="mt-2 text-lg font-extrabold leading-snug">{s.title}</h3>
-                      <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
-                        {formatDateTime(s.startsAt)} – {formatDateTime(s.endsAt)}
-                      </p>
-                    </div>
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--md-surface-container)] text-[var(--md-primary)]">
-                      <Video className="size-5" />
-                    </span>
-                  </div>
-                  <p className="mt-4 rounded-xl bg-[var(--md-surface-container)] p-3 text-xs font-semibold text-[var(--md-on-surface-variant)]">
-                    Link vào lớp trực tiếp sẽ hiển thị tại đây.
-                  </p>
-                </article>
-              ))}
+        {tab === "live" && (
+          <div className="space-y-6">
+            <section className="md-card p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">HỎI NHANH TRỰC TIẾP</p>
+              <h2 className="mt-1 text-xl font-extrabold">Trả lời câu hỏi của giáo viên</h2>
+              <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+                Trang tự cập nhật — hãy trả lời trước khi giáo viên đóng câu hỏi.
+              </p>
+              <div className="mt-4">
+                <LiveRoom classroomId={classroomId} role="student" />
+              </div>
+            </section>
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--md-on-surface-variant)]">LỊCH BUỔI HỌC</p>
+              {sessions.length === 0 ? (
+                <Empty text="Chưa có lớp trực tiếp nào sắp diễn ra." />
+              ) : (
+                <div className="grid gap-4">
+                  {sessions.map((s) => (
+                    <article key={s.id} className="md-card p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="md-chip">SẮP DIỄN RA</span>
+                          <h3 className="mt-2 text-lg font-extrabold leading-snug">{s.title}</h3>
+                          <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+                            {formatDateTime(s.startsAt)} – {formatDateTime(s.endsAt)}
+                          </p>
+                        </div>
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[var(--md-surface-container)] text-[var(--md-primary)]">
+                          <Video className="size-5" />
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          </div>
+        )}
       </section>
     </main>
   );

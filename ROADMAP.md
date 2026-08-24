@@ -6,7 +6,7 @@
 ## Hiện trạng
 
 - **Stack**: Next.js (server actions + Prisma trực tiếp, single process) + SQLite — Fastify sidecar đã loại (02b33e5)
-- **Đã ship**: learn path (video/flashcard/quiz/essay/milestone), streak/XP/daily goal, classroom (announcements, assignments, sessions, materials), video chapters + resume position, SRS drills (Leitner stages 0–4), pronunciation practice MVP (Web Speech API), multi-question quiz builder + gradebook, rubric essay grading + re-grade
+- **Đã ship**: learn path (video/flashcard/quiz/essay/milestone), streak/XP/daily goal, classroom (announcements, assignments, sessions, materials), video chapters + resume position, SRS drills (Leitner stages 0–4), pronunciation practice MVP (Web Speech API), multi-question quiz builder + gradebook, rubric essay grading + re-grade, live quick questions
 - **Nợ kỹ thuật chính**: test/CI (P0-2) — chưa có test framework + GitHub Actions
 
 ## P0 — Nền móng
@@ -91,6 +91,18 @@ Chấm essay theo rubric criterion-based (3–4 tiêu chí × điểm) thay vì 
 
 **Acceptance**: học viên thấy deadline hôm nay ngay trên dashboard; click 1 To-Do item → vào thẳng bài.
 
+### 8. Live quick questions (lớp trực tiếp) — ✅ shipped (24/08/2026)
+
+Giáo viên đưa câu hỏi nhanh lên lớp (trắc nghiệm 2–4 lựa chọn hoặc tự do, tùy chọn đánh dấu đáp án đúng) — học viên trả lời real-time, xem kết quả về đích + phân phối câu trả lời (bar chart %), +2 XP/lượt trả lời.
+
+**Đã ship**:
+- Model `QuickQuestion` + `QuickQuestionResponse` (1 câu trả lời/user/câu hỏi), migration `20260824162224_add_quick_questions`.
+- `LiveRoom` (client, poll `/api/live/[classroomId]` mỗi 3s) ghép vào trang lớp của giáo viên (`/teacher/classes/[id]` — section "Hỏi nhanh với cả lớp") + tab "Lớp trực tiếp" của học viên (`/classes/[id]?tab=live`).
+- Actions: `createQuickQuestionAction` (tự đóng câu hỏi cũ — luôn chỉ 1 câu OPEN/lớp), `closeQuickQuestionAction`, `respondQuickQuestionAction` (validate lựa chọn hợp lệ, +2 XP `live-answer`).
+- Quyền: giáo viên sở hữu lớp / admin tạo + đóng; học viên thành viên lớp trả lời. Kết quả đóng hiển thị đáp án đúng + badge "BẠN".
+
+**Còn lại**: video call thật (Jitsi — xem P3 "Live session thật"); push qua WebSocket/SSE thay cho polling nếu cần realtime chặt hơn.
+
 ## P2 — Production readiness
 
 ### 7. SQLite → Postgres + single service deploy
@@ -121,7 +133,7 @@ Checklist trước khi có thật user: form labels, contrast, keyboard navigati
 
 | Item | Ghi chú |
 |---|---|
-| Live session thật | Model `ClassSession.roomKey` đã sẵn; Jitsi iframe. Value xuất hiện khi có lớp thật |
+| Live session thật (video) | Quick questions đã ship (P1-8); còn lại Jitsi iframe — model `ClassSession.roomKey` đã sẵn. Value xuất hiện khi có lớp thật |
 | Teacher analytics | At-risk students, retention per class |
 | PWA install | Mobile learning, offline-first |
 | i18n framework | Chỉ khi mở rộng audience ngoài UI tiếng Việt (Canvas có 87 locales — chưa cần) |

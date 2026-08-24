@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { deadlineLabel, formatDateTime } from "@/lib/utils";
 import { AttachMaterialForm, CreateAssignmentForm, PostAnnouncementForm, ScheduleSessionForm } from "@/components/staff/ClassroomDetailForms";
+import { LiveRoom } from "@/components/live/LiveRoom";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -202,6 +203,17 @@ export default async function TeacherClassroomDetailPage({ params }: { params: P
 
           <section className="md-card p-5">
             <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">LỚP TRỰC TIẾP</p>
+            <h2 className="mt-1 text-xl font-extrabold">Hỏi nhanh với cả lớp</h2>
+            <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+              Đưa câu hỏi lên lớp và xem câu trả lời về đích ngay — trang cập nhật tự động.
+            </p>
+            <div className="mt-4">
+              <LiveRoom classroomId={classroom.id} role="teacher" />
+            </div>
+          </section>
+
+          <section className="md-card p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">LỊCH BUỔI HỌC</p>
             <h2 className="mt-1 text-xl font-extrabold">Lên lịch buổi học trực tiếp</h2>
             <div className="mt-4">
               <ScheduleSessionForm classroomId={classroom.id} />
@@ -218,11 +230,6 @@ export default async function TeacherClassroomDetailPage({ params }: { params: P
                   <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
                     {formatDateTime(s.startsAt)} — {formatDateTime(s.endsAt)}
                   </p>
-                  {s.status === "SCHEDULED" && (
-                    <p className="mt-1 text-xs text-[var(--md-on-surface-variant)]">
-                      Link vào lớp trực tiếp sẽ hiển thị tại đây — đang phát triển.
-                    </p>
-                  )}
                 </article>
               ))}
               {sessions.length === 0 && (

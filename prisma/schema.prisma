@@ -91,6 +91,11 @@ enum SessionStatus {
   CANCELLED
 }
 
+enum QuickQuestionStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -125,10 +130,12 @@ model User {
   invitationsSent ClassInvitation[] @relation("InvitationSender")
   invitations     ClassInvitation[] @relation("InvitationRecipient")
   notifications   Notification[]
-  auditLogs        AuditLog[]        @relation("AuditActor")
-  announcements    Announcement[]  @relation("AnnouncementAuthor")
-  assignmentsCreated Assignment[]    @relation("AssignmentCreator")
-  materialsAdded   ClassMaterial[]   @relation("MaterialAddedBy")
+   auditLogs        AuditLog[]        @relation("AuditActor")
+   announcements    Announcement[]  @relation("AnnouncementAuthor")
+   assignmentsCreated Assignment[]    @relation("AssignmentCreator")
+   materialsAdded   ClassMaterial[]   @relation("MaterialAddedBy")
+   quickQuestions   QuickQuestion[]   @relation("QuickQuestionCreator")
+   quickQuestionAnswers QuickQuestionResponse[]
 }
 
 model Course {
@@ -172,14 +179,15 @@ model Classroom {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  course      Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  teacher     User               @relation("ClassroomTeacher", fields: [teacherId], references: [id])
-  members     ClassroomMember[]
-  invitations ClassInvitation[]
-  announcements Announcement[]
-  assignments Assignment[]
-  sessions    ClassSession[]
-  materials   ClassMaterial[]
+   course      Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+   teacher     User               @relation("ClassroomTeacher", fields: [teacherId], references: [id])
+   members     ClassroomMember[]
+   invitations ClassInvitation[]
+   announcements Announcement[]
+   assignments Assignment[]
+   sessions    ClassSession[]
+   materials   ClassMaterial[]
+   quickQuestions QuickQuestion[]
 
   @@index([teacherId, status])
   @@index([courseId])
@@ -593,4 +601,36 @@ model ClassMaterial {
   addedBy    User       @relation("MaterialAddedBy", fields: [addedById], references: [id])
 
   @@index([classroomId])
+}
+
+model QuickQuestion {
+  id          String              @id @default(cuid())
+  classroomId String
+  teacherId   String
+  prompt      String
+  optionsJson String? // choice mode: ["A","B","C",...]; null = free text
+  correctOption String? // option text marked correct by teacher (nullable)
+  status      QuickQuestionStatus @default(OPEN)
+  createdAt   DateTime            @default(now())
+  closedAt    DateTime?
+
+  classroom Classroom             @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  teacher   User                  @relation("QuickQuestionCreator", fields: [teacherId], references: [id])
+  responses QuickQuestionResponse[]
+
+  @@index([classroomId, status])
+}
+
+model QuickQuestionResponse {
+  id          String   @id @default(cuid())
+  questionId  String
+  userId      String
+  answer      String
+  submittedAt DateTime @default(now())
+
+  question QuickQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
+  @@index([questionId])
 }
