@@ -27,6 +27,9 @@ public/uploads/*
 !public/uploads/.gitkeep
 *.pem
 
+# agent local state
+.omo/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
