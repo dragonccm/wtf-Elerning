@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.classMaterial.deleteMany();
+  await prisma.classSession.deleteMany();
+  await prisma.assignmentNode.deleteMany();
+  await prisma.assignment.deleteMany();
+  await prisma.announcement.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.classInvitation.deleteMany();
@@ -21,6 +26,7 @@ async function main() {
   await prisma.assessment.deleteMany();
   await prisma.flashcard.deleteMany();
   await prisma.flashcardDeck.deleteMany();
+  await prisma.videoChapter.deleteMany();
   await prisma.lessonVideo.deleteMany();
   await prisma.lessonNode.deleteMany();
   await prisma.unit.deleteMany();
@@ -130,10 +136,17 @@ async function main() {
       status: "PUBLISHED",
       video: {
         create: {
-          videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
+          videoUrl: "/uploads/demo-lesson.mp4",
           pdfUrl: "/docs/unit1-greetings",
-          durationSec: 420,
+          durationSec: 10,
           summary: "Học cách chào hỏi: 你好, 早上好, 再见.",
+          chapters: {
+            create: [
+              { title: "Mở đầu", startSec: 0, orderIndex: 0 },
+              { title: "Chào hỏi", startSec: 4, orderIndex: 1 },
+              { title: "Luyện phát âm", startSec: 7, orderIndex: 2 },
+            ],
+          },
         },
       },
     },
@@ -183,6 +196,26 @@ async function main() {
       },
     },
   });
+
+  // SRS demo marks for student (Minh Anh): 2 cards due now + 1 due in 7 days + 再见 left unmarked (new)
+  const flashDeck = await prisma.flashcardDeck.findUniqueOrThrow({
+    where: { nodeId: flashNode.id },
+    include: { cards: true },
+  });
+  const cardByHanzi = (hanzi: string) => flashDeck.cards.find((c) => c.hanzi === hanzi);
+  const cardHello = cardByHanzi("你好");
+  const cardThanks = cardByHanzi("谢谢");
+  const cardMorning = cardByHanzi("早上好");
+  if (cardHello && cardThanks && cardMorning) {
+    const srsNow = new Date();
+    await prisma.flashcardMark.createMany({
+      data: [
+        { userId: student.id, flashcardId: cardHello.id, known: true, stage: 1, dueAt: new Date(srsNow.getTime() - 60_000), lastReviewedAt: new Date(srsNow.getTime() - 86_400_000) },
+        { userId: student.id, flashcardId: cardThanks.id, known: true, stage: 2, dueAt: new Date(srsNow.getTime() - 1_200_000), lastReviewedAt: new Date(srsNow.getTime() - 3 * 86_400_000) },
+        { userId: student.id, flashcardId: cardMorning.id, known: true, stage: 3, dueAt: new Date(srsNow.getTime() + 7 * 86_400_000), lastReviewedAt: new Date(srsNow.getTime() - 7 * 86_400_000) },
+      ],
+    });
+  }
 
   const quizNode = await prisma.lessonNode.create({
     data: {
@@ -279,6 +312,79 @@ async function main() {
     },
   });
 
+  // --- Classroom core demo data: announcement, assignment, live session, material ---
+  const assignment = await prisma.assignment.create({
+    data: {
+      classroomId: classroom.id,
+      createdBy: teacher.id,
+      title: "Ôn Unit 1: quiz + tự luận",
+      description: "Hoàn thành \"Kiểm tra Unit 1\" và bài tự luận \"Giới thiệu bản thân\". Tự luận sẽ được cô chấm và phản hồi chi tiết.",
+      dueAt: new Date(Date.now() + 7 * 86_400_000),
+      publishedAt: new Date(),
+      nodes: {
+        create: [
+          { nodeId: quizNode.id, orderIndex: 1 },
+          { nodeId: essayNode.id, orderIndex: 2 },
+        ],
+      },
+    },
+  });
+
+  await prisma.announcement.create({
+    data: {
+      classroomId: classroom.id,
+      authorId: teacher.id,
+      title: "Tuần này: chào hỏi (Unit 1)",
+      body: "Xem video Unit 1 và làm flashcard trước tối thứ 7. Bài tập quiz + tự luận đã được giao, hạn chót 7 ngày.",
+    },
+  });
+
+  await prisma.classSession.create({
+    data: {
+      classroomId: classroom.id,
+      title: "Luyện nói trực tiếp: Chào hỏi",
+      startsAt: new Date(Date.now() + 3 * 86_400_000 + 2 * 3_600_000),
+      endsAt: new Date(Date.now() + 3 * 86_400_000 + 3 * 3_600_000),
+      status: "SCHEDULED",
+    },
+  });
+
+  const materialAsset = await prisma.mediaAsset.create({
+    data: {
+      ownerId: teacher.id,
+      originalName: "giaovan-unit1.pdf",
+      storedName: "seed-unit1-lecture.pdf",
+      mimeType: "application/pdf",
+      size: 204_800,
+      url: "/docs/unit1-greetings",
+    },
+  });
+  await prisma.classMaterial.create({
+    data: {
+      classroomId: classroom.id,
+      mediaAssetId: materialAsset.id,
+      title: "Giáo án Unit 1 (tài liệu in)",
+      addedById: teacher.id,
+    },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: student.id, type: "ASSIGNMENT", title: `Bài tập mới: ${assignment.title}`,
+        message: "Cô Lan vừa giao bài tập mới. Hạn chót trong 7 ngày.", href: `/classes/${classroom.id}`,
+      },
+      {
+        userId: student.id, type: "LIVE_SESSION", title: "Lớp trực tiếp: Luyện nói — Chào hỏi",
+        message: "Cô Lan đã lên lịch lớp học trực tiếp trong 3 ngày tới.", href: `/classes/${classroom.id}`,
+      },
+      {
+        userId: student2.id, type: "ASSIGNMENT", title: `Bài tập mới: ${assignment.title}`,
+        message: "Cô Lan vừa giao bài tập mới. Hạn chót trong 7 ngày.", href: `/classes/${classroom.id}`,
+      },
+    ],
+  });
+
   await prisma.lessonNode.create({
     data: {
       unitId: unit1.id,
@@ -299,9 +405,15 @@ async function main() {
       status: "PUBLISHED",
       video: {
         create: {
-          videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
-          durationSec: 360,
+          videoUrl: "/uploads/demo-lesson.mp4",
+          durationSec: 10,
           summary: "Từ vựng gia đình: 爸爸, 妈妈, 哥哥, 妹妹.",
+          chapters: {
+            create: [
+              { title: "Mở đầu", startSec: 0, orderIndex: 0 },
+              { title: "Từ vựng gia đình", startSec: 5, orderIndex: 1 },
+            ],
+          },
         },
       },
     },
@@ -316,6 +428,18 @@ async function main() {
       completed: true,
       timeSpentSec: 400,
       completedAt: new Date(),
+    },
+  });
+
+  // Partial watch for student (Minh Anh) — demos resume on the video player
+  await prisma.progressEvent.create({
+    data: {
+      userId: student.id,
+      nodeId: videoNode.id,
+      completed: false,
+      timeSpentSec: 5,
+      lastPositionSec: 3,
+      lastWatchedAt: new Date(Date.now() - 3_600_000),
     },
   });
 
