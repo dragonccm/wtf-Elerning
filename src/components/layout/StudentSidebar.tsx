@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, isPathActive } from "@/lib/utils";
 import { ChartColumn, GraduationCap, House, Layers, UserRound, Zap } from "lucide-react";
 
 const items = [
@@ -14,6 +14,8 @@ const items = [
   { href: "/profile", label: "Hồ sơ", icon: UserRound },
 ];
 
+const itemHrefs = items.map((i) => i.href);
+
 export function StudentSidebar({ brand = "WTF Learn" }: { brand?: string }) {
   const pathname = usePathname();
 
@@ -24,7 +26,7 @@ export function StudentSidebar({ brand = "WTF Learn" }: { brand?: string }) {
       </Link>
       <nav className="flex flex-1 flex-col gap-2">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = isPathActive(pathname, item.href, itemHrefs);
           const Icon = item.icon;
           return (
             <Link
@@ -63,7 +65,7 @@ export function StudentMobileNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t-2 border-[#e5e5e5] bg-white lg:hidden">
       <ul className="mx-auto grid max-w-lg grid-cols-6">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = isPathActive(pathname, item.href, itemHrefs);
           const Icon = item.icon;
           return (
             <li key={item.href}>

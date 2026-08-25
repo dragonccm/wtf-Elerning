@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, isPathActive } from "@/lib/utils";
 import { ReactNode } from "react";
 
 export function StaffSidebar({
@@ -15,6 +15,7 @@ export function StaffSidebar({
   footer?: ReactNode;
 }) {
   const pathname = usePathname();
+  const hrefs = items.map((i) => i.href);
   return (
     <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 flex-col bg-[var(--md-surface-container)] lg:flex">
       <div className="px-6 py-7">
@@ -23,7 +24,7 @@ export function StaffSidebar({
       </div>
       <nav aria-label={title} className="flex-1 space-y-1 px-3">
         {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = isPathActive(pathname, item.href, hrefs);
           return (
             <Link
               key={item.href}

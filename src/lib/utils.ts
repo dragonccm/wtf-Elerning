@@ -43,3 +43,15 @@ export function deadlineLabel(dueAt: Date | string) {
   if (hours < 48) return `Còn ${hours} giờ`;
   return `Còn ${Math.ceil(diffMs / 86_400_000)} ngày`;
 }
+
+/**
+ * Nav active check — "longest match wins".
+ * Item is active when pathname equals its href or is under it,
+ * and no longer item href matches more specifically.
+ * (prevents /admin and /admin/courses from both being active)
+ */
+export function isPathActive(pathname: string, href: string, hrefs: string[]) {
+  const matches = (h: string) => pathname === h || pathname.startsWith(h + "/");
+  if (!matches(href)) return false;
+  return !hrefs.some((other) => other !== href && other.length > href.length && matches(other));
+}
