@@ -218,8 +218,13 @@ export async function submitQuizAction(assessmentId: string, nodeId: string, ans
   redirect(`/learn/results/${submission.id}`);
 }
 
-export async function submitEssayAction(assessmentId: string, nodeId: string, text: string) {
+export type EssayFormState = { ok?: boolean; message?: string };
+
+export async function submitEssayFormAction(_state: EssayFormState, formData: FormData): Promise<EssayFormState> {
   const user = await requireUser();
+  const assessmentId = String(formData.get("assessmentId") || "");
+  const nodeId = String(formData.get("nodeId") || "");
+  const text = String(formData.get("text") || "");
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId },
     include: { questions: true },
@@ -228,7 +233,8 @@ export async function submitEssayAction(assessmentId: string, nodeId: string, te
   const question = assessment.questions[0];
   if (!question || !question.type.startsWith("ESSAY")) throw new Error("Bài tự luận không hợp lệ");
   const cleanText = text.trim();
-  if (cleanText.length < 10) throw new Error("Bài viết cần ít nhất 10 ký tự");
+  // validation -> friendly inline message, never a thrown runtime error
+  if (cleanText.length < 10) return { message: "Bài viết cần ít nhất 10 ký tự — hãy viết thêm một chút rồi nộp lại." };
   const submission = await prisma.submission.create({
     data: {
       userId: user.id,
