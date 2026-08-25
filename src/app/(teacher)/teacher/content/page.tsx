@@ -8,6 +8,28 @@ import { QuizBuilder } from "@/components/staff/QuizBuilder";
 import { EssayBuilder } from "@/components/staff/EssayBuilder";
 import { Fragment } from "react";
 
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Nháp",
+  PENDING_REVIEW: "Chờ duyệt",
+  PUBLISHED: "Đã xuất bản",
+  ARCHIVED: "Đã lưu trữ",
+};
+
+const STATUS_HINTS: Record<string, string> = {
+  DRAFT: "Bước tiếp theo: bấm “Gửi Admin duyệt” để học viên có thể làm bài.",
+  PENDING_REVIEW: "Đang chờ Admin duyệt — học viên chưa thấy bài này.",
+  PUBLISHED: "Học viên đã làm được tại trang Học (/learn) sau khi ghi danh. Có thể giao kèm hạn chót ở tab Lớp học.",
+  ARCHIVED: "Đã lưu trữ — học viên không còn làm bài này.",
+};
+
+const NODE_TYPE_LABELS: Record<string, string> = {
+  VIDEO: "Video",
+  FLASHCARD: "Flashcard",
+  QUIZ: "Bài kiểm tra",
+  ESSAY: "Tự luận",
+  MILESTONE: "Cột mốc",
+};
+
 export default async function TeacherContentPage() {
   const user = await requireRole("TEACHER");
   const courses = await prisma.course.findMany({
@@ -27,6 +49,24 @@ export default async function TeacherContentPage() {
         <h1 className="text-3xl font-extrabold">Nội dung bài học</h1>
         <p className="mt-1 text-[var(--muted)]">Tạo video, flashcard và bài tập trong unit được giao.</p>
       </div>
+
+      <section className="rounded-[22px] border border-[var(--line)] bg-white p-5">
+        <h2 className="text-lg font-extrabold">Quy trình đưa bài đến học viên</h2>
+        <ol className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["1", "Tạo nội dung", "Quiz, tự luận, video, flashcard trong unit của khóa nháp (form bên dưới)."],
+            ["2", "Gửi Admin duyệt", "Bấm nút “Gửi Admin duyệt” dưới mỗi khóa học ở cuối trang này."],
+            ["3", "Admin duyệt", "Khóa học + bài học chuyển sang ĐÃ XUẤT BẢN — học viên mới nhìn thấy."],
+            ["4", "Học viên làm bài", "Tại trang Học (/learn) sau khi ghi danh — hoặc nhận qua “Giao bài tập” có hạn chót ở tab Lớp học."],
+          ].map(([n, t, d]) => (
+            <li key={n} className="rounded-2xl bg-[var(--surface)] p-4">
+              <span className="flex size-7 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-extrabold text-white">{n}</span>
+              <h3 className="mt-2 text-sm font-extrabold">{t}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--muted)]">{d}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <form action={createCourseAction} className="md-card grid gap-3 p-5"><div><p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">Bước 1</p><h2 className="text-xl font-extrabold">Tạo khóa học nháp</h2></div><input name="title" required placeholder="Tên khóa học" className="md-field"/><textarea name="description" placeholder="Mô tả" className="md-field"/><div className="grid grid-cols-2 gap-2"><input name="level" defaultValue="HSK1" className="md-field"/><select name="category" className="md-field"><option value="HSK">HSK</option><option value="COMMUNICATION">Giao tiếp</option><option value="EXAM">Luyện thi</option></select></div><button className="md-button w-fit">Tạo bản nháp</button></form>
@@ -76,7 +116,10 @@ export default async function TeacherContentPage() {
           </form>
         </FormCard>
         <FormCard title="Tạo bài kiểm tra">
-          <p className="mb-3 text-sm text-[var(--muted)]">Trắc nghiệm, điền khuyết hoặc xếp thứ tự — nhiều câu hỏi, tự động chấm điểm.</p>
+          <p className="mb-3 text-sm text-[var(--muted)]">
+            Trắc nghiệm, điền khuyết hoặc xếp thứ tự — nhiều câu hỏi, tự động chấm điểm.
+            Sau khi Admin duyệt + học viên ghi danh, bài sẽ hiện trong trang Học của học viên.
+          </p>
           <QuizBuilder units={units} />
         </FormCard>
         <FormCard title="Tạo bài tự luận">
@@ -86,17 +129,27 @@ export default async function TeacherContentPage() {
       </section>}
 
       <section className="space-y-4">
+        <h2 className="text-xl font-extrabold">Khóa học của bạn</h2>
         {courses.map((course) => (
           <div key={course.id} className="rounded-[22px] border border-[var(--line)] bg-white p-5">
             <h2 className="text-xl font-extrabold">{course.title}</h2>
-            <div className="mt-2 flex items-center gap-2"><span className="md-chip">{course.status}</span>{course.status==="DRAFT"&&<form action={submitCourseForReviewAction}><input type="hidden" name="courseId" value={course.id}/><button className="md-button outlined">Gửi Admin duyệt</button></form>}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="md-chip">{STATUS_LABELS[course.status] ?? course.status}</span>
+              {course.status === "DRAFT" && (
+                <form action={submitCourseForReviewAction}>
+                  <input type="hidden" name="courseId" value={course.id} />
+                  <button className="md-button outlined">Gửi Admin duyệt</button>
+                </form>
+              )}
+            </div>
+            <p className="mt-2 text-sm font-semibold text-[var(--muted)]">{STATUS_HINTS[course.status]}</p>
             {course.units.map((unit) => (
               <div key={unit.id} className="mt-4">
                 <h3 className="font-bold text-[var(--brand-dark)]">{unit.title}</h3>
                 <ul className="mt-2 space-y-1 text-sm text-[var(--muted)]">
                   {unit.nodes.map((n) => (
                     <li key={n.id}>
-                      #{n.orderIndex} · {n.type} · {n.title}
+                      #{n.orderIndex} · {NODE_TYPE_LABELS[n.type] ?? n.type} · {n.title}
                     </li>
                   ))}
                 </ul>
