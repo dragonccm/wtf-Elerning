@@ -3,10 +3,16 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import Link from "next/link";
 
-export default async function TeacherClassesPage() {
+export default async function TeacherClassesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ course?: string }>;
+}) {
   const user = await requireRole("TEACHER");
+  const params = await searchParams;
   const [courses, classrooms] = await Promise.all([
-    prisma.course.findMany({ where: { teacherId: user.id, status: "PUBLISHED" }, select: { id: true, title: true } }),
+    // All published courses can back a classroom (incl. courses created by admin/other teachers).
+    prisma.course.findMany({ where: { status: "PUBLISHED" }, select: { id: true, title: true }, orderBy: { createdAt: "asc" } }),
     prisma.classroom.findMany({
       where: user.role === "ADMIN" ? {} : { teacherId: user.id },
       include: { course: true, _count: { select: { members: true, invitations: true } } },
@@ -21,7 +27,13 @@ export default async function TeacherClassesPage() {
         <h1 className="mt-1 text-3xl font-extrabold">Lớp học của bạn</h1>
         <p className="mt-2 text-[var(--md-on-surface-variant)]">Mở lớp, chia sẻ mã tham gia và theo dõi danh sách học viên.</p>
       </header>
-      <CreateClassroomForm courses={courses} />
+      <CreateClassroomForm courses={courses} defaultCourseId={params.course} />
+      {courses.length === 0 && (
+        <div className="md-card p-5 text-sm text-[var(--md-on-surface-variant)]">
+          Chưa có khóa học nào đã xuất bản. Tạo khóa ở <Link className="font-bold text-[var(--md-primary)]" href="/teacher/content?tab=course">Nội dung bài học → Tạo khóa học</Link>,
+          gửi Admin duyệt, sau đó quay lại đây mở lớp.
+        </div>
+      )}
       <section className="grid gap-4">
         {classrooms.map((c) => (
           <article key={c.id} className="md-card p-5">

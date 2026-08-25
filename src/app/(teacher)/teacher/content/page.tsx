@@ -60,6 +60,10 @@ export default async function TeacherContentPage({
         orderBy: { orderIndex: "asc" },
         include: { nodes: { orderBy: { orderIndex: "asc" } } },
       },
+      classrooms: {
+        select: { id: true, name: true, code: true, status: true, _count: { select: { members: true } } },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
   const units = courses.flatMap((c) => c.units.map((u) => ({ ...u, courseTitle: c.title })));
@@ -238,6 +242,36 @@ export default async function TeacherContentPage({
                 )}
               </div>
               <p className="mt-2 text-sm font-semibold text-[var(--muted)]">{STATUS_HINTS[course.status]}</p>
+              <div className="mt-4 rounded-2xl bg-[var(--surface)] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-[var(--muted)]">Lớp học dùng khóa này</h3>
+                  {course.status === "PUBLISHED" && (
+                    <Link href={`/teacher/classes?course=${course.id}`} className="rounded-full bg-[var(--brand)] px-4 py-1.5 text-xs font-extrabold text-white">
+                      Tạo lớp học
+                    </Link>
+                  )}
+                </div>
+                {course.classrooms.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {course.classrooms.map((c) => (
+                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <Link href={`/teacher/classes/${c.id}`} className="font-bold text-[var(--brand-dark)] hover:underline">
+                          {c.name}
+                        </Link>
+                        <span className="font-mono text-xs text-[var(--muted)]">
+                          Mã {c.code} · {c._count.members} học viên · {c.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    {course.status === "PUBLISHED"
+                      ? "Chưa có lớp nào cho khóa này — bấm “Tạo lớp học” để mở lớp, chia sẻ link tham gia và mời học viên."
+                      : "Sau khi khóa được xuất bản, bạn có thể mở lớp học cho khóa này ở tab Lớp học."}
+                  </p>
+                )}
+              </div>
               {course.units.map((unit) => (
                 <div key={unit.id} className="mt-4">
                   <h3 className="font-bold text-[var(--brand-dark)]">{unit.title}</h3>

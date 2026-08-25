@@ -4,9 +4,13 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { deadlineLabel, formatDateTime } from "@/lib/utils";
 import { AttachMaterialForm, CreateAssignmentForm, PostAnnouncementForm, ScheduleSessionForm } from "@/components/staff/ClassroomDetailForms";
+import { AddMemberForm, SetClassPasswordForm, ShareClassCard } from "@/components/staff/ClassroomForms";
+import { ClassSideTabs } from "@/components/staff/ClassSideTabs";
 import { LiveRoom } from "@/components/live/LiveRoom";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { CalendarClock } from "lucide-react";
 
 type BoardRow = Awaited<ReturnType<typeof getTeacherAssignmentBoard>>[number];
 
@@ -95,6 +99,21 @@ export default async function TeacherClassroomDetailPage({ params }: { params: P
     units.flatMap((u) => u.nodes.map((n) => [n.id, `${n.title} — ${NODE_TYPE_LABELS[n.type] ?? n.type}`] as const)),
   );
 
+  // registered accounts the teacher can add directly (no password needed)
+  const studentCandidates = await prisma.user.findMany({
+    where: { role: "STUDENT", isActive: true, id: { notIn: members.map((m) => m.userId) } },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+    take: 500,
+  });
+
+  const now = new Date();
+  const nextSession = sessions.find((s) => s.status === "SCHEDULED" && s.startsAt >= now);
+
+  const h = await headers();
+  const host = h.get("host") ?? "localhost:3000";
+  const shareUrl = `${h.get("x-forwarded-proto") === "https" ? "https" : "http"}://${host}/courses/join?code=${classroom.code}`;
+
   return (
     <div className="space-y-6">
       <header>
@@ -108,10 +127,29 @@ export default async function TeacherClassroomDetailPage({ params }: { params: P
             <p className="mt-2 text-[var(--md-on-surface-variant)]">
               {classroom.course.title} · Mã <strong className="font-mono">{classroom.code}</strong> · {members.length} học viên · Giáo viên: {classroom.teacher.name}
             </p>
+            {nextSession && (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-[var(--md-secondary-container)] px-4 py-2 text-sm font-extrabold text-[var(--md-on-surface)]">
+                <CalendarClock className="size-4" />
+                Buổi học sắp tới: {nextSession.title} — {formatDateTime(nextSession.startsAt)}
+              </p>
+            )}
           </div>
           <span className="md-chip">{CLASSROOM_STATUS_LABELS[classroom.status] ?? classroom.status}</span>
         </div>
       </header>
+
+      <ShareClassCard name={classroom.name} code={classroom.code} shareUrl={shareUrl} ended={classroom.status === "ENDED"} />
+
+      <section className="md-card p-5">
+        <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">MẬT KHẨU LỚP</p>
+        <h2 className="mt-1 text-xl font-extrabold">Đặt mật khẩu tham gia lớp</h2>
+        <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+          Đặt mã dễ nhớ cho học viên (thay cho mật khẩu ngẫu nhiên khi tạo lớp). Học viên nhập mã lớp + mật khẩu này để vào lớp.
+        </p>
+        <div className="mt-4">
+          <SetClassPasswordForm classroomId={classroom.id} ended={classroom.status === "ENDED"} />
+        </div>
+      </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">
@@ -157,111 +195,141 @@ export default async function TeacherClassroomDetailPage({ params }: { params: P
               </ul>
             ) : (
               <p className="mt-4 rounded-2xl bg-[var(--md-surface-container)] p-6 text-center text-sm text-[var(--md-on-surface-variant)]">
-                Chưa có học viên nào. Mời học viên từ trang danh sách lớp.
+                Chưa có học viên nào — thêm trực tiếp từ tài khoản đã đăng ký ở bên dưới, hoặc chia sẻ link/mã lớp cho học viên tự tham gia.
               </p>
             )}
+            <AddMemberForm classroomId={classroom.id} candidates={studentCandidates} />
           </section>
         </div>
 
-        <div className="space-y-5">
-          <section className="md-card p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">THÔNG BÁO</p>
-            <h2 className="mt-1 text-xl font-extrabold">Gửi thông báo cho cả lớp</h2>
-            <div className="mt-4">
-              <PostAnnouncementForm classroomId={classroom.id} />
-            </div>
-            <div className="mt-4 space-y-3 border-t border-[var(--md-outline-variant)] pt-4">
-              {announcements.map((an) => (
-                <article key={an.id} className="rounded-2xl bg-[var(--md-surface-container)] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-extrabold">{an.title}</h3>
-                    <p className="text-xs text-[var(--md-on-surface-variant)]">{formatDateTime(an.createdAt)}</p>
+        <ClassSideTabs
+          tabs={[
+            {
+              key: "announcements",
+              label: "Thông báo",
+              badge: announcements.length,
+              content: (
+                <>
+                  <h2 className="text-lg font-extrabold">Gửi thông báo cho cả lớp</h2>
+                  <div className="mt-3">
+                    <PostAnnouncementForm classroomId={classroom.id} />
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--md-on-surface-variant)]">{an.body}</p>
-                  <p className="mt-2 text-xs font-bold text-[var(--md-primary)]">{an.author.name}</p>
-                </article>
-              ))}
-              {announcements.length === 0 && (
-                <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có thông báo nào.</p>
-              )}
-            </div>
-          </section>
-
-          <section className="md-card p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">BÀI TẬP MỚI</p>
-            <h2 className="mt-1 text-xl font-extrabold">Giao bài tập có hạn chót</h2>
-            <div className="mt-4">
-              {unitsWithNodes.length > 0 ? (
-                <CreateAssignmentForm classroomId={classroom.id} units={unitsWithNodes} />
-              ) : (
-                <p className="rounded-2xl bg-[var(--md-surface-container)] p-4 text-sm text-[var(--md-on-surface-variant)]">
-                  Chưa có bài học nào được xuất bản trong khóa này.
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section className="md-card p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">LỚP TRỰC TIẾP</p>
-            <h2 className="mt-1 text-xl font-extrabold">Hỏi nhanh với cả lớp</h2>
-            <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
-              Đưa câu hỏi lên lớp và xem câu trả lời về đích ngay — trang cập nhật tự động.
-            </p>
-            <div className="mt-4">
-              <LiveRoom classroomId={classroom.id} role="teacher" />
-            </div>
-          </section>
-
-          <section className="md-card p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">LỊCH BUỔI HỌC</p>
-            <h2 className="mt-1 text-xl font-extrabold">Lên lịch buổi học trực tiếp</h2>
-            <div className="mt-4">
-              <ScheduleSessionForm classroomId={classroom.id} />
-            </div>
-            <div className="mt-4 space-y-3 border-t border-[var(--md-outline-variant)] pt-4">
-              {sessions.map((s) => (
-                <article key={s.id} className="rounded-2xl bg-[var(--md-surface-container)] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-extrabold">{s.title}</h3>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold ${SESSION_STATUS_CLASSES[s.status] ?? SESSION_STATUS_CLASSES.SCHEDULED}`}>
-                      {SESSION_STATUS_LABELS[s.status] ?? s.status}
-                    </span>
+                  <div className="mt-4 space-y-3 border-t border-[var(--md-outline-variant)] pt-4">
+                    {announcements.map((an) => (
+                      <article key={an.id} className="rounded-2xl bg-[var(--md-surface-container)] p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-extrabold">{an.title}</h3>
+                          <p className="text-xs text-[var(--md-on-surface-variant)]">{formatDateTime(an.createdAt)}</p>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--md-on-surface-variant)]">{an.body}</p>
+                        <p className="mt-2 text-xs font-bold text-[var(--md-primary)]">{an.author.name}</p>
+                      </article>
+                    ))}
+                    {announcements.length === 0 && (
+                      <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có thông báo nào.</p>
+                    )}
                   </div>
+                </>
+              ),
+            },
+            {
+              key: "assignment",
+              label: "Bài tập mới",
+              content: (
+                <>
+                  <h2 className="text-lg font-extrabold">Giao bài tập có hạn chót</h2>
+                  <div className="mt-3">
+                    {unitsWithNodes.length > 0 ? (
+                      <CreateAssignmentForm classroomId={classroom.id} units={unitsWithNodes} />
+                    ) : (
+                      <p className="rounded-2xl bg-[var(--md-surface-container)] p-4 text-sm text-[var(--md-on-surface-variant)]">
+                        Chưa có bài học nào được xuất bản trong khóa này.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ),
+            },
+            {
+              key: "schedule",
+              label: "Lịch học",
+              badge: sessions.filter((s) => s.status === "SCHEDULED").length,
+              content: (
+                <>
+                  <h2 className="text-lg font-extrabold">Lịch học của lớp</h2>
                   <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
-                    {formatDateTime(s.startsAt)} — {formatDateTime(s.endsAt)}
+                    Lên lịch buổi học trực tiếp — học viên thấy lịch ở trang Lớp của họ.
                   </p>
-                </article>
-              ))}
-              {sessions.length === 0 && (
-                <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có lịch lớp trực tiếp nào.</p>
-              )}
-            </div>
-          </section>
-
-          <section className="md-card p-5">
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--md-primary)]">TÀI LIỆU</p>
-            <h2 className="mt-1 text-xl font-extrabold">Gắn tài liệu vào lớp</h2>
-            <div className="mt-4">
-              <AttachMaterialForm classroomId={classroom.id} assets={assets.map((a) => ({ id: a.id, originalName: a.originalName }))} />
-            </div>
-            <div className="mt-4 space-y-2 border-t border-[var(--md-outline-variant)] pt-4">
-              {materials.map((m) => (
-                <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[var(--md-surface-container)] px-4 py-3">
-                  <div>
-                    <p className="font-bold">{m.title}</p>
-                    <p className="text-xs text-[var(--md-on-surface-variant)]">
-                      {m.mediaAsset.originalName} · {m.addedBy.name}
-                    </p>
+                  <div className="mt-3">
+                    <ScheduleSessionForm classroomId={classroom.id} />
                   </div>
-                  <p className="text-xs text-[var(--md-on-surface-variant)]">{formatDateTime(m.createdAt, false)}</p>
-                </div>
-              ))}
-              {materials.length === 0 && (
-                <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có tài liệu nào được gắn vào lớp.</p>
-              )}
-            </div>
-          </section>
-        </div>
+                  <div className="mt-4 space-y-3 border-t border-[var(--md-outline-variant)] pt-4">
+                    {sessions.map((s) => (
+                      <article key={s.id} className="rounded-2xl bg-[var(--md-surface-container)] p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-extrabold">{s.title}</h3>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold ${SESSION_STATUS_CLASSES[s.status] ?? SESSION_STATUS_CLASSES.SCHEDULED}`}>
+                            {SESSION_STATUS_LABELS[s.status] ?? s.status}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+                          {formatDateTime(s.startsAt)} — {formatDateTime(s.endsAt)}
+                        </p>
+                      </article>
+                    ))}
+                    {sessions.length === 0 && (
+                      <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có lịch lớp học nào — tạo buổi đầu tiên ở form trên.</p>
+                    )}
+                  </div>
+                </>
+              ),
+            },
+            {
+              key: "live",
+              label: "Hỏi nhanh",
+              content: (
+                <>
+                  <h2 className="text-lg font-extrabold">Hỏi nhanh với cả lớp</h2>
+                  <p className="mt-1 text-sm text-[var(--md-on-surface-variant)]">
+                    Đưa câu hỏi lên lớp và xem câu trả lời về đích ngay — trang cập nhật tự động.
+                  </p>
+                  <div className="mt-3">
+                    <LiveRoom classroomId={classroom.id} role="teacher" />
+                  </div>
+                </>
+              ),
+            },
+            {
+              key: "materials",
+              label: "Tài liệu",
+              badge: materials.length,
+              content: (
+                <>
+                  <h2 className="text-lg font-extrabold">Gắn tài liệu vào lớp</h2>
+                  <div className="mt-3">
+                    <AttachMaterialForm classroomId={classroom.id} assets={assets.map((a) => ({ id: a.id, originalName: a.originalName }))} />
+                  </div>
+                  <div className="mt-4 space-y-2 border-t border-[var(--md-outline-variant)] pt-4">
+                    {materials.map((m) => (
+                      <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[var(--md-surface-container)] px-4 py-3">
+                        <div>
+                          <p className="font-bold">{m.title}</p>
+                          <p className="text-xs text-[var(--md-on-surface-variant)]">
+                            {m.mediaAsset.originalName} · {m.addedBy.name}
+                          </p>
+                        </div>
+                        <p className="text-xs text-[var(--md-on-surface-variant)]">{formatDateTime(m.createdAt, false)}</p>
+                      </div>
+                    ))}
+                    {materials.length === 0 && (
+                      <p className="text-sm text-[var(--md-on-surface-variant)]">Chưa có tài liệu nào được gắn vào lớp.</p>
+                    )}
+                  </div>
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
     </div>
   );

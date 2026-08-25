@@ -30,10 +30,12 @@ export async function createClassroomAction(_state: ActionState, formData: FormD
   }).safeParse(Object.fromEntries(formData));
   if (!parsed.success || parsed.data.endsAt <= parsed.data.startsAt) return { message: "Thông tin hoặc thời hạn lớp không hợp lệ." };
 
+  // Any published course can back a classroom — courses may be created by any
+  // teacher/admin; the classroom's teacher is the person creating the class.
   const course = await prisma.course.findFirst({
-    where: { id: parsed.data.courseId, status: "PUBLISHED", ...(teacher.role === "ADMIN" ? {} : { teacherId: teacher.id }) },
+    where: { id: parsed.data.courseId, status: "PUBLISHED" },
   });
-  if (!course) return { message: "Khóa học chưa xuất bản hoặc bạn không có quyền." };
+  if (!course) return { message: "Khóa học chưa được xuất bản." };
 
   const code = classCode();
   const password = classPassword();
@@ -125,6 +127,50 @@ export async function rotateClassroomPasswordAction(_state: ActionState, formDat
   await prisma.classroom.update({ where: { id: classroom.id }, data: { passwordHash: await bcrypt.hash(password, 10), passwordVersion: { increment: 1 }, failedAttempts: 0, lockedUntil: null } });
   await writeAudit(teacher.id, "CLASSROOM_PASSWORD_ROTATED", "Classroom", classroom.id, { version: classroom.passwordVersion + 1 });
   return { ok: true, message: "Mật khẩu cũ đã bị vô hiệu hóa. Hãy lưu mật khẩu mới.", code: classroom.code, password };
+}
+
+export async function setClassroomPasswordAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const teacher = await requireRole("TEACHER");
+  const classroomId = String(formData.get("classroomId") || "");
+  const newPassword = String(formData.get("newPassword") || "");
+  const classroom = await prisma.classroom.findFirst({ where: { id: classroomId, ...(teacher.role === "ADMIN" ? {} : { teacherId: teacher.id }) } });
+  if (!classroom) return { message: "Không tìm thấy lớp học." };
+  if (newPassword.length < 6 || newPassword.length > 40) return { message: "Mật khẩu cần từ 6 đến 40 ký tự." };
+  await prisma.classroom.update({
+    where: { id: classroom.id },
+    data: { passwordHash: await bcrypt.hash(newPassword, 10), passwordVersion: { increment: 1 }, failedAttempts: 0, lockedUntil: null },
+  });
+  await writeAudit(teacher.id, "CLASSROOM_PASSWORD_SET", "Classroom", classroom.id, { version: classroom.passwordVersion + 1 });
+  return { ok: true, message: `Đã đặt mật khẩu mới cho lớp ${classroom.name}. Chia sẻ cho học viên để tham gia.` };
+}
+
+export async function addClassMemberAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const teacher = await requireRole("TEACHER");
+  const classroomId = String(formData.get("classroomId") || "");
+  const userId = String(formData.get("userId") || "");
+  const classroom = await prisma.classroom.findFirst({
+    where: { id: classroomId, ...(teacher.role === "ADMIN" ? {} : { teacherId: teacher.id }) },
+    include: { course: { select: { id: true, title: true } } },
+  });
+  if (!classroom) return { message: "Không tìm thấy lớp học." };
+  const student = await prisma.user.findFirst({ where: { id: userId, role: "STUDENT", isActive: true } });
+  if (!student) return { message: "Học viên không tồn tại hoặc không còn hoạt động." };
+  await prisma.$transaction([
+    prisma.classroomMember.upsert({
+      where: { classroomId_userId: { classroomId: classroom.id, userId: student.id } },
+      create: { classroomId: classroom.id, userId: student.id },
+      update: {},
+    }),
+    prisma.enrollment.upsert({
+      where: { userId_courseId: { userId: student.id, courseId: classroom.courseId } },
+      create: { userId: student.id, courseId: classroom.courseId },
+      update: {},
+    }),
+    prisma.classInvitation.updateMany({ where: { classroomId: classroom.id, email: student.email }, data: { status: "ACCEPTED", acceptedAt: new Date() } }),
+  ]);
+  await writeAudit(teacher.id, "CLASSROOM_MEMBER_ADDED", "Classroom", classroom.id, { userId: student.id });
+  revalidatePath(`/teacher/classes/${classroom.id}`);
+  return { ok: true, message: `Đã thêm ${student.name} vào lớp ${classroom.name}.` };
 }
 
 export async function closeClassroomAction(formData: FormData) {

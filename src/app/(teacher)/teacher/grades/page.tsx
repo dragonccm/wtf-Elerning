@@ -4,13 +4,17 @@ import { CourseSwitcher } from "@/components/staff/CourseSwitcher";
 import Link from "next/link";
 import type { Submission } from "@prisma/client";
 
+const PAGE_SIZE = 25;
+
 export default async function TeacherGradesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ course?: string; submissionId?: string }>;
+  searchParams: Promise<{ course?: string; submissionId?: string; q?: string; page?: string }>;
 }) {
   const user = await requireRole("TEACHER");
   const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  const pageParam = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
   const courseScope = user.role === "ADMIN" ? {} : { teacherId: user.id };
   const courses = await prisma.course.findMany({ where: courseScope, orderBy: { createdAt: "asc" } });
 
@@ -25,18 +29,25 @@ export default async function TeacherGradesPage({
 
   const courseId = params.course && courses.some((c) => c.id === params.course) ? params.course : courses[0].id;
 
-  const [students, nodes] = await Promise.all([
-    prisma.enrollment.findMany({
-      where: { courseId },
-      select: { user: { select: { id: true, name: true, email: true } } },
-      orderBy: { user: { name: "asc" } },
-    }),
-    prisma.lessonNode.findMany({
-      where: { unit: { courseId }, type: { in: ["QUIZ", "ESSAY"] }, assessment: { isNot: null } },
-      include: { unit: true, assessment: { include: { questions: { select: { id: true } } } } },
-      orderBy: [{ unit: { orderIndex: "asc" } }, { orderIndex: "asc" }],
-    }),
-  ]);
+  const allStudents = await prisma.enrollment.findMany({
+    where: { courseId },
+    select: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { user: { name: "asc" } },
+  });
+  // search + pagination in JS — fine for hundreds of students, avoids SQL dialect quirks
+  const qLower = q.toLowerCase();
+  const filtered = qLower
+    ? allStudents.filter((s) => s.user.name.toLowerCase().includes(qLower) || s.user.email.toLowerCase().includes(qLower))
+    : allStudents;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(pageParam, pageCount);
+  const students = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const nodes = await prisma.lessonNode.findMany({
+    where: { unit: { courseId }, type: { in: ["QUIZ", "ESSAY"] }, assessment: { isNot: null } },
+    include: { unit: true, assessment: { include: { questions: { select: { id: true } } } } },
+    orderBy: [{ unit: { orderIndex: "asc" } }, { orderIndex: "asc" }],
+  });
 
   const studentIds = students.map((s) => s.user.id);
   const assessmentIds = nodes.map((n) => n.assessment!.id);
@@ -80,6 +91,25 @@ export default async function TeacherGradesPage({
         </div>
         <CourseSwitcher courses={courses.map((c) => ({ id: c.id, title: c.title }))} selected={courseId} />
       </div>
+
+      <form method="GET" action="/teacher/grades" className="flex flex-wrap items-center gap-2">
+        <input type="hidden" name="course" value={courseId} />
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Tìm học viên theo tên hoặc email…"
+          className="min-w-[220px] flex-1 rounded-xl border-2 border-[var(--line)] px-3 py-2 outline-none focus:border-[var(--brand)] sm:max-w-xs"
+        />
+        <button type="submit" className="rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-extrabold text-white hover:brightness-105">
+          Tìm
+        </button>
+        {q && (
+          <Link href={`/teacher/grades?course=${courseId}`} className="text-sm font-bold text-[var(--muted)] hover:underline">
+            Xóa lọc
+          </Link>
+        )}
+      </form>
 
       {detail && <SubmissionDetail submission={detail} backHref={`/teacher/grades?course=${courseId}`} />}
 
@@ -141,6 +171,32 @@ export default async function TeacherGradesPage({
           </tbody>
         </table>
       </div>
+
+      {filtered.length > 0 && (
+        <p className="text-sm text-[var(--muted)]">
+          {filtered.length} học viên{q ? ` (lọc theo “${q}”)` : ""} · trang {page}/{pageCount}
+        </p>
+      )}
+      {pageCount > 1 && (
+        <div className="flex gap-2">
+          {page > 1 && (
+            <Link
+              href={`/teacher/grades?course=${courseId}${q ? `&q=${encodeURIComponent(q)}` : ""}&page=${page - 1}`}
+              className="rounded-full border-2 border-[var(--line)] px-4 py-1.5 text-sm font-extrabold hover:bg-[var(--surface)]"
+            >
+              ← Trang trước
+            </Link>
+          )}
+          {page < pageCount && (
+            <Link
+              href={`/teacher/grades?course=${courseId}${q ? `&q=${encodeURIComponent(q)}` : ""}&page=${page + 1}`}
+              className="rounded-full border-2 border-[var(--line)] px-4 py-1.5 text-sm font-extrabold hover:bg-[var(--surface)]"
+            >
+              Trang sau →
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   );
 }
